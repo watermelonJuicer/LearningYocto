@@ -81,3 +81,49 @@ If we get this wrong (wrong depth, wrong wildcard), BitBake will simply never se
 The conventional Yocto structure is:
 `recipes-<category>/<recipe-name>/<recipe-name>.bb`
 
+### `BBFILE_COLLLECTIONS`
+registers your layer's collection name into the global list of active layers
+
+### `BBFILE_PATTERN_my_layer`
+A regex used to test which files (matched via BBFILES globally, across all layers) actually "belong" to this collection. Since BBFILES is a flat global list contributed to by every layer, BitBake needs a way to attribute each matched file back to its owning layer for priority/override purposes — this pattern is that attribution mechanism. Anchoring on ^${LAYERDIR}/ is standard and rarely needs changing.
+
+### `BBFILE_PRIORITY_mylayer`
+This is the conflict resolution priority, a integer (higher = higher priority). It matters in two scenarios:
+
+Same recipe (same PN) provided by two layers — the higher-priority layer's version is preferred by default.
+Multiple .bbappend files targeting the same recipe — they're applied in priority order (lowest → highest), so a higher-priority layer's append effectively has the "final say" in ordering.
+
+### `LAYERDEPENDS_mylayer`
+
+```bash 
+LAYERDEPENDS_mylayer = "core openembedded-layer"`
+
+# we can also pin versions. 
+LAYERDEPENDS_mylayer = "core:5"
+
+```
+Declares hard dependencies on other layers' collection names (not directory names — collection names, as declared by their BBFILE_COLLECTIONS). If a listed dependency isn't present in bblayers.conf, BitBake errors out at parse time instead of failing mysteriously later when a require/inherit can't be resolved. core refers to OE-Core's collection (from meta/conf/layer.conf) and is almost always a dependency.
+
+### `LAYERSERIES_COMPAT_mylayer`
+```bash 
+LAYERSERIES_COMPAT_mylayer = "scarthgap"
+```
+Lists the Yocto release codenames your layer has been validated against (e.g. kirkstone, langdale, mickledore, nanbield, scarthgap).
+
+### FULL Example
+```bash 
+# We have a conf and classes directory, add to BBPATH
+BBPATH .= ":${LAYERDIR}"
+
+# We have recipes-* directories, add to BBFILES
+BBFILES += "${LAYERDIR}/recipes-*/*/*.bb \
+            ${LAYERDIR}/recipes-*/*/*.bbappend"
+
+BBFILE_COLLECTIONS += "mylayer"
+BBFILE_PATTERN_mylayer = "^${LAYERDIR}/"
+BBFILE_PRIORITY_mylayer = "6"
+
+LAYERDEPENDS_mylayer = "core"
+LAYERSERIES_COMPAT_mylayer = "scarthgap"
+```
+
