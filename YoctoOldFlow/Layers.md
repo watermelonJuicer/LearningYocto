@@ -127,3 +127,11 @@ LAYERDEPENDS_mylayer = "core"
 LAYERSERIES_COMPAT_mylayer = "scarthgap"
 ```
 
+
+# Yocto Check Layer script. 
+
+its a script provided by yocto, which can access how compatible is our custom layer, with yocto project. 
+```bash
+yocto-check-layer <custom_layer_full_path>
+```
+

@@ -1,0 +1,2 @@
+1. core-image-minimal run of qemu
+2. add lsusb to our custom image.
