@@ -3,6 +3,8 @@ It is rensponsible for creating the entire linux distribution from source.
 
 Other receipes, involves compiling or rather cross-compiling software, but image is receipe which will agregate everything, and package them, and give us linux distribution. 
 
+Image receipe is receipe whose job is not to compile anything, but take already built or compiled packages from other recipes, assemble them into root file system, and package that rootfs into one or more bootable images. 
+
 Image involves : compiler, tools, libraries, Bootloader, kernel, RootFilesystem.
 
 Creating custom images 
@@ -11,6 +13,10 @@ Creating custom images
 there are 2 ways, 
 	1. creating image from scratch (writing image.bb from scratch) <- TEDIOUS
 	2. extend or modify the existing image receipe (preferable as we just edit part concerning us, we build on top of whats existing, instead of building from scratch)
+
+core-image-minimal recipe : `meta/recipes-core/images/core-image-minimal.bb`
+core-image-sate    recipe : `meta/recipes-sato/images/core-image-sato.bb`
+
 
 # Package Group
 
@@ -96,7 +102,33 @@ build
 # Image Features
 
 
+
+
 Questions : 
 	1. Image.bb file from scratch understanding. 
 	2. what are Image_features?
 	3. whats the difference between image_install and image_features?
+
+
+----
+
+core-image-minimal tracing 
+```
+IMAGE_INSTALL = "packagegroup-core-boot ${CORE_IMAGE_EXTRA_INSTALL}"
+inherit core-image
+```
+
+core-image
+```bash 
+# defined package features. 
+
+CORE_IMAGE_BASE_INSTALL = "
+	packagegroup-core-boot \
+	packagegroup-base-extended \
+	${CORE_IMAGE_EXTRA_INSTALL} \
+	"
+
+CORE_IMAGE_EXTRA_INSTALL ?= ""
+IMAGE_INSTALL ?= "${CORE_IMAGE_BASE_INSTALL}"
+
+```
