@@ -18,7 +18,7 @@ core-image-minimal recipe : `meta/recipes-core/images/core-image-minimal.bb`
 core-image-sate    recipe : `meta/recipes-sato/images/core-image-sato.bb`
 
 
-# Package Group
+# Package (package.md)[package.md]
 
 Set of packages which can be included in any image. 
 
@@ -26,6 +26,12 @@ contains set of packages. (these packages are packages, which software depend up
 backend)
 
 using package-group name in `IMAGE_INSTALL` variable installs all packages defined by the package group into the root file system of target image. 
+
+## how to search for packages to install. 
+
+how to list down available packages. 
+
+
 
 # Image creation 
 

@@ -147,3 +147,8 @@ bitbake core-image-minimal
 
 meta-yocto-bsp would provide basic functionality. the minimum, generic hardware capabilities from beagle-bone-black. To unlock full potential, full hardware using capabilities, we need to use layer configuration provided by manufacturer itself, ti instruments. meta-yocto-bsp would provide basic cpu functionalities, kernel support, but lets say hardware has image processing unit, which is propreitery to texas instrument. that chip support, or board module support would be provided in hardware specification defined in meta-ti layer. 
 
+
+
+
+# Recipes 
+
