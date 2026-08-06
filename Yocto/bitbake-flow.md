@@ -1,8 +1,4 @@
-# Questions 
 
-
-
------
 Before BitBake compiles a single line of code, it does zero building.
 It first reads metadata across every layer, builds one complete task graph (parse phase),
 and only then starts executing tasks in dependency order (execute phase).

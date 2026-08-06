@@ -3,10 +3,8 @@ A bbclass file is same as .bb file, but its purely intended for inhertiting and 
 
 `.bbclass` file, is purely for code duplication and inheriting code. Existing purely for code-reuse. 
 
-
-
---
-all the tasks, defined in bitbake, fetch -> unpack -> patch -> compile -> package
+-------
+All the tasks, defined in bitbake, fetch -> unpack -> patch -> compile -> package
 can be mapped one on one with python functions, do_fetch(), do_unpack() etc. 
 these functions are shared, and are all defined in some or other bbclasses file. these bbclasses file and 
 inherited in bbfiles, and then these functions are used. 
