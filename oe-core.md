@@ -3,20 +3,20 @@ Open-Embedded core layer, on top of bitbake, defines classes and function which 
 
 > Real Hardware support requires BSP layer (which defines stuff related to real hardware), sitting beside OE-core layer. {exactly the reason why meta-ti and meta-beaglebone exists as seperate layer}
 
-Builds and defines on top of bitbake, 
+OE-core Builds and defines on top of bitbake, 
 	-> bitbake `do_Compile` = compile wherever there is makefile. 
 	-> oe-core `do_Compile` = bitbake do_compile + extra stuff. 
 	-> defines packaging subsystem `package.bbclass` that bitbake had no concept of it at all. 
 
 # Major elements of oe-core layer 
 
-## Cross-Compilation/ sysroot infrastructure 
+## Cross-Compilation and sysroot infrastructure 
 
 `do_populate_sysroot`, `native.bbclass`, `nativesdk.bbclass`, `cross.bbclass`, `crosssdk.bbclass`
 solely provided by oe-core. setting up cross-compiler, that compiles on source machine for target architecture. 
 
 A compiler running on our host machine, can only compile for host machine architecture. What if we want to cross-compile. 
-We cant install generic toolchain, as solution for first problem but that generic toolchain, is already built against someone's specific choice of libraries, headers etc. Someone else's choice of C library version, kernel headers version, float ABI, and feature set.
+We cant install generic toolchain, as solution for first problem as that generic toolchain, is already built against someone's specific choice of libraries, headers etc. Someone else's choice of C library version, kernel headers version, float ABI, and feature set.
 
 Yocto build wants a specific, reproducible combination of all libraries — matched exactly to our `MACHINE`/`DISTRO` config. So OE-Core doesn't trust an external compiler at all: **it builds its own cross-compiler from source, as part of the build itself**, using the exact same recipe/task machinery as everything else.
 
