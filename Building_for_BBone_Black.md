@@ -48,8 +48,3 @@ An Image, in Yocto terms, is the actual build target — a top-level recipe (a `
 
 ```
 
-<<<<<<< Updated upstream
-=======
-
-
->>>>>>> Stashed changes

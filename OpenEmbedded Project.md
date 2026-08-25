@@ -1,3 +1,6 @@
+Open-embedded project started with group, which wanted to automate the compilation or building of custom embedded linux kernels.  they built the architecture and framework of recipes, modular approach etc. they built an engine, called bitbake, which reads the configuration files (.bb file, .conf file of this newly generated framework) and compile binaries, link etc. they are majorly inclusive. 
+It supported range of hardware, range of software components.
+
 Open Embedded Project started as open-source, community driven project. 
 Its an generic Framework, which creates architecture agnostic custom Linux images for custom hardware. 
 There is no limit on what type of hardware it supported. You define the hardware, use the framework and you can create YOUR custom linux image. 

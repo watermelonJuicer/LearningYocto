@@ -1,11 +1,13 @@
 # Introduction
 
-## Elements of embedded linux 
+## Elements of Building embedded linux 
 	1. ToolChain : compiler, assembler, linker. The program or Tool which generates or compiles the image, main kernel etc. 
 	2. Boot loader : the program which boots the kernel. 
 	3. Kernel : main brain. the one which manages the resources of system. 
 	4. filesystem : the filesystem, where all program and files resides.  
 
+OF the above listed elements, bootloader, kernel and filesystem are what goes inside the linux image. 
+ToolChain is used to build the rest of stuff. 
 ## Yocto 
 
 INPUT : 
@@ -14,10 +16,8 @@ INPUT :
 OUTPUT : our custom Embedded linux distribution
 			- (Linux Kernel, Root File system, Bootloader, Device Tree)
 
-open-embedded project started with group, which wanted to automate the compilation or building of custom embedded linux kernels.  they built the architecture and framework of recipes, modular approach etc. they built an engine, called bitbake, which reads the configuration files (.bb file, .conf file of this newly generated framework) and compile binaries, link etc. they are majorly inclusive. 
-It supported range of hardware, range of software components.
-
-Yocto is standardized version. It borrowed the framework of open-embedded, recipes and parsing and compilation engine, selected only most important recipes, the minimal recipes, and standardized hardware. 
+Yocto is standardized version for building custom linux images. 
+It borrowed the framework from open-embedded, recipes and parsing and compilation engine, selected only most important recipes, the minimal recipes, and standardized hardware. 
 Yocto is kind of framework, which borrows down from open-embedded but has rigirous testing, and standard support from industry. 
 
 With yocto, we have poky. the golden reference of yocto. anyone can fork yocto and use its framework.
@@ -27,32 +27,26 @@ we can add various extra receipe in poky by adding new receipes, adhering to yoc
 ## Poky 
 working reference of yocto project. 
 yocto refers to system used to build our custom embedded linux project, poky is one of the working example of yocto. 
-poky at technical level is combined repo of component 
+yocto at technical level is combined repo of component 
 * bitbake 
 * OpenEmbedded Core 
 * meta-yocto-bsp
 * Documentation
 
 ### metadata (in yocto terminology)
-- metadata refers to instructions for build or instruction which are used at build time. 
+- metadata refers to instructions for build or instruction which are used at build time to build linux image (here). 
 - command and data used to indicate version of software. 
 - where to obtain the information or code or data for compilation 
 - changes or addition to software (patches)
-basically metadata is all the configuration data, and additional data which specifies what to do with main data or information. we have code, main source code of kernel in form of c files etc. what to do with those c files, compile, link etc, we need instruction for that. thats metadata. 
+
+basically metadata is all the configuration data, and additional data which specifies what to do with main data or information.
+we have code, main source code of kernel in form of c files etc. what to do with those c files, compile, link etc, we need instruction for that. thats metadata. 
 
 In yocto, metadata comes in form of: 
 - configuration files (.conf)
 - Recipes (.bb & .bbappend)
 - class (.bbclass)
 - Include (.inc) files
-
-### bitbake 
-- core component of yocto project, borrowed directly from open-embedded. 
-- parses the recipe and configuration files (which are mix of python and shell-script )
-- upon parsing, it fetch packages, build them, tracks its completed or not, and after building, make sure its incorporated or included in bootable image, we will load in hardware. 
-	- all its function or parsing, fetching from internet, building or compiling, and packaging are all specified by instruction coded in receipe files or thorugh framwork. 
-- in yocto, there are multiple receips, so it keeps track of every one of them, making sure the bootable image contains all binaries. 
-
 ### meta-yocto bsp 
 1. receipe containing configuration files, related to hardware board. (device files, configuration files)
 2. it contains programs and other stuff related to functioning of board or hardware. (if it has screen, drivers of screen etc)
