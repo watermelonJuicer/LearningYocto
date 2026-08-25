@@ -107,14 +107,10 @@ build
 
 # Image Features
 
-
-
-
 Questions : 
 	1. Image.bb file from scratch understanding. 
 	2. what are Image_features?
 	3. whats the difference between image_install and image_features?
-
 
 ----
 

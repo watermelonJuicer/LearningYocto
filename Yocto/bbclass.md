@@ -6,18 +6,15 @@ A bbclass file is same as .bb file, but its purely intended for inhertiting and 
 -------
 All the tasks, defined in bitbake, fetch -> unpack -> patch -> compile -> package
 can be mapped one on one with python functions, do_fetch(), do_unpack() etc. 
-these functions are shared, and are all defined in some or other bbclasses file. these bbclasses file and 
-inherited in bbfiles, and then these functions are used. 
+these functions are shared, and are all defined in some or other bbclasses file. 
 
 BitBake itself is a Python program. It parses every .bb/.bbclass/.conf file into an in-memory datastore object (call it d — you'll see this exact variable name everywhere in real class code) that holds every variable and every task definition.
-
 
 A shell task (do_x() { ... }) is not interpreted by Python at runtime. BitBake takes the shell body, expands every ${VAR} using the datastore, and writes out an actual standalone shell script to disk — then hands it to a real /bin/sh subprocess. Python's job ends at code generation.
 
 You can literally see this: after any build, the generated, fully-expanded script for a task sits at
 
 `tmp/work/<arch>/<recipe>/<version>/temp/run.do_compile`
-
 
 why we dont do inherit base class, so we can use functions like do_compile(), do_package() etc. 
 
