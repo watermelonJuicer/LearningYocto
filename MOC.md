@@ -14,3 +14,11 @@
 | ---------------------- | ------------------------------------------------------------ |
 | [[core-minimal-image]] | Building yocto core minimal image and understanding the flow |
 | [[meta layer]]         | disecting the meta layer in detail.                          |
+| bbclasses              | folder containing explanation of major bbclasses             |
+
+
+# bbclasses
+
+| bbclass          | Info                      | defined in     |
+| ---------------- | ------------------------- | -------------- |
+| [[base_bbclass]] | base.bbclass information. | classes.global |
