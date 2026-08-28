@@ -170,5 +170,65 @@ do_install() {
     install -m 0755 mybinary ${D}${bindir}/mybinary
 }
 
+######################################################################
+
+
+# Or for Makefile-based packages:
+do_install() {
+    oe_runmake install DESTDIR=${D}
+}
+
+
 ```
 
+# `do_build()`
+
+`do_populate_sysroot` is the last real-work task — it takes installed files from `${D}` and copies them into the shared sysroot so other recipes can find headers/libraries. Once that's done, `do_build` fires.
+
+```bash 
+# add task of do_build after do_populate_sysroot
+addtask build after do_populate_sysroot
+
+# no execution task
+do_build[noexec] = "1"
+
+# recursive dependency
+do_build[recrdeptask] += "do_deploy"
+
+# empty task. we just need defination
+do_build () {
+	:
+}
+```
+
+this tasm is no such actual task, just a graph node. last node of graph. we need it, as we always build towards `do_build` task and every graph starts to execute down. 
+usually, we do `bitbake recipe-name`. it needs concrete task to execute, and that is do_build. 
+
+`BB_DEFAULT_TASK = "do_build"` — BitBake always builds toward this task. Without it as a named node, there's nothing to point at.
+
+`recrdeptask` = **recursive dependency task**.
+Normal task dependencies are flat — "run A before B for this recipe." `recrdeptask` is graph-wide
+
+> "Before `do_build` of **this** recipe is complete, `do_deploy` must have run on **this recipe AND every recipe it depends on, transitively.**"
+
+
+From this bbclass, dependency graph of task which are defined are such as 
+
+`do_fetch` -> `do_unpack` -> `do_configure` -> `do_compile` -> `do_install` -> `do_build`
+
+Original graph of task is 
+```
+do_fetch
+  → do_unpack
+    → do_patch {not defined in base.bbclass}
+      → do_configure
+        → do_compile
+          → do_install
+            → do_package (from package.bbclass)
+              → do_populate_sysroot (from staging.bbclass)
+                → do_build   ← anchor point
+```
+
+`do_build` is default task for all recipes unless stated otherwise, and it depends on all normal tasks required to build the recipe. 
+`bitbake core-image-minimal` with `-c` runs `do_build`, as value of `BB_DEFAULT_TASK ?= build`. if we change this variable, default task is changed. 
+It exists to make sure everything else already happened. 
