@@ -14,11 +14,32 @@
 | ---------------------- | ------------------------------------------------------------ |
 | [[core-minimal-image]] | Building yocto core minimal image and understanding the flow |
 | [[meta layer]]         | disecting the meta layer in detail.                          |
-| bbclasses              | folder containing explanation of major bbclasses             |
+| [[bbclass]]            | folder containing explanation of major bbclasses             |
 
 
-# bbclasses
+# bbclasses (BASE)
 
-| bbclass          | Info                      | defined in     |
-| ---------------- | ------------------------- | -------------- |
-| [[base_bbclass]] | base.bbclass information. | classes.global |
+| bbclass             | Info                                                                               | defined in     |
+| ------------------- | ---------------------------------------------------------------------------------- | -------------- |
+| [[base_bbclass]]    | base.bbclass information. ==MOST IMPORTANT==                                       | classes.global |
+| [[staging_bbclass]] | staging.bbclass information. provides populate sysroot. step after the do_install. | classes.global |
+| [[package_bbclass]] | package.bbclass information                                                        | classes.global |
+|                     |                                                                                    |                |
+# bbclasses (For building kernel)
+
+| bbclass            | Info                 |
+| ------------------ | -------------------- |
+| [[kernel_bbclass]] | Kernel.bbclass info. |
+|                    |                      |
+
+learning kernel bbclass sequence 
+1. kernel-arch & linux-kernel-base 
+2. kernel.bbclass (line by line)
+3. kernel-module-split
+4. kernel-uimage, kernel-uboot, and kernel-artifact-names
+5. kernel.devicetree.bbclass
+6. kernel-yocto.bbclass
+7. module.bbclass & module-base.bbclass
+
+
+
