@@ -81,21 +81,18 @@ same make target step, but each one is bitbake task and is automatically execute
 	1. `kernel_do_deploy` drops everything into `DEPLOY_DIR_IMAGE`; wic (`WKS_FILE` + `IMAGE_BOOT_FILES`) is the automated version of "copy zImage+dtb to the FAT partition."
 
 
+# Flow of `kernel.bbclass`
 
-----
-# COGNITION 
+## `do_fetch`
 
-## Steps of kernel.bbclass mapped. 
+Untouched by kernel.bbclass. Same defination as defined in base.bbclass. 
 
-do_fetch : untouched 
-	same as bitbake do_fetch, no modification or rewrite done. 
-
-## do_unpack : 
+## `do_unpack`
 
 Does Task flag extention of do_unpack of oe-core function 
 
 - `do_unpack[cleandirs] += " ${S} ${STAGING_KERNEL_DIR} ${B} ${STAGING_KERNEL_BUILDDIR}"`
-- its adding to cleandirs, bitbake wipes these 4 directories before running it. 
+- its adding to cleandirs, bitbake wipes these 4 directories before running it. (For fresh build, you need to clear out whats stage and whats compiled if its stale.) Its stale or not, is found by another mechanism. 
 
 do_unpack takes whats downloaded under `${DL_DIR}` by do_fetch step, and extracts, checkout git tree etc under `${WORKDIR}`.
 
@@ -105,10 +102,109 @@ do_unpack[cleandirs] += " ${S} ${STAGING_KERNEL_DIR} ${B} ${STAGING_KERNEL_BUILD
 do_clean[cleandirs]  += " ${S} ${STAGING_KERNEL_DIR} ${B} ${STAGING_KERNEL_BUILDDIR}"
 ```
 
+### `${S} =  KERNEL_STAGING_DIR`
+	default in bitbake.conf : `${TMPDIR}/work-shared/${MACHINE}/kernel-source/`
 
-do_symlink_kernsrc : new task Added 
+- Scoped by machine. 
+- The patched, unpacked source of linux source (whatever version etc selected in kernel recipe) lives here. 
+- Stable, predictable path. 
+- Read-Only. 
+- `.config`, `vmlinux` or kernel build output are not written to this directory. 
+- The source is untouched by build. 
+
+### `${B} = ${WORKDIR}/build`
+
+`KBUILD_OUTPUT = ${B}`
+It is WORKDIR scoped. Every distinct kernel build, different version etc, get its own ${B}. 
+This is where `.config`, every compiled `.o`, `vmlinux`, `System.map`, `Module.symvers` actually land.
+
+`do_unpack[cleandirs]` and `do_clean[cleandirs]` wipe this every time, because it's _entirely_ regenerable from `${S}` + a config, nothing here is precious.
+
+### `STAGING_KERNER_BUILDDIR` : shared publish point
+
+value : `${TMPDIR}/work-shared/${MACHINE}/kernel-build-atrifacts`
+Use : 
+	copy the _essential subset_ of `${B}`'s private output (`System.map`, `.config`, `Module.symvers`, generated headers
+	 the kernel version/localversion strings, signing keys) into this stable, shared location.
+	 The contents of this directory will be used by other recipe, for its build etc. 
+
+
+## `do_symlink_kernsrc` 
+
+New Task added by kernel.bbclass. 
+
+Mainly does
 	`addtask symlink_kernsrc before do_patch do_configure after do_unpack`
 	Relocates the source unpacked from `${S}=${WORKDIR}/tree/` to `STAGING_KERNEL_DIR`
+
+### What it is Fundamentally ?
+1: Everything (recipes, and hardcoded code in kernel building recipe) looks for kernel source related stuff in `KERNEL_SRC = ${STAGING_KERNEL_DIR}`.
+	`module.bbclass` reads `KERNEL_SRC=${STAGING_KERNEL_DIR}`, `kernel-arch.bbclass` bakes `${STAGING_KERNEL_DIR}` into debug-info remapping.
+2: None of them look at `${S}`. However, we do `${S} = ${STAGING_KERNEL_DIR}`. 
+3: That only works if one thing is guaranteed: _the real kernel source is always reachable at `STAGING_KERNEL_DIR`, no matter what any individual recipe happened to set `${S}` to._
+4: `do_symlink_kernsrc` is the task that **enforces that guarantee**.
+5: entire job is: _if `S` and `STAGING_KERNEL_DIR` are not already the same place, make them resolve to the same content anyway._
+
+### WHY ?
+**Why not just set up the symlink in advance and let the fetcher unpack straight through it?**
+We set simlink of `${S}` and `${STAGING_KERNEL_DIR}` and in `do_unpack` step, directly unpack into `${STAGING_KERNEL_DIR}`. 
+1: "We can't just create the symlink in advance as the git fetcher can't cope with the symlink."
+2: do_unpack fetcher machinery, need to unpack into a **real directory**, full stop; its internal directory-handling (checking existence, cleaning stale checkouts, moving/renaming paths) isn't written to cope with unpacking into or through a symlink. 
+3: So the indirection or redirection has to be introduced as a **separate step, after** unpacking finishes — which is exactly what `do_symlink_kernelsrc` task is. Let it unpack, and then as seperate task, we copy into `${STAGING_KERNEL_DIR}`. 
+
+### HOW ? how it works, actual data flow etc ?
+```python
+s = d.getVar("S")
+kernsrc = d.getVar("STAGING_KERNEL_DIR")
+
+# if S != STAGING_KERNEL_DIR
+if s != kernsrc:
+    bb.utils.mkdirhier(kernsrc)        # ensure the target path exists
+    bb.utils.remove(kernsrc, recurse=True)   # wipe it — guarantee empty target
+    if s[-1] == '/':
+        s = s[:-1]                     
+    # strip trailing slash (os.symlink quirk-avoidance)
+```
+
+2 Cases from here. We have EXTERNSRC (external source of kernel), local copy which we want to build from. 
+
+case 1 : no external local source
+```python
+BEFORE:
+  ${WORKDIR}/git/            ← real directory, actual unpacked source
+  ${STAGING_KERNEL_DIR}      ← just wiped, empty
+
+  shutil.move(s, kernsrc)     # physically relocate all real content
+  os.symlink(kernsrc, s)      # leave a symlink at the OLD path, pointing to the NEW real location
+
+AFTER:
+  ${STAGING_KERNEL_DIR}/            ← real directory, now holds the actual source (moved here)
+  ${WORKDIR}/git → ${STAGING_KERNEL_DIR}   ← symlink; ${S} still "works" transparently
+```
+
+content phycially moves. 
+
+CASE 2 : external local source present. 
+```python
+BEFORE:
+  ${S} = /home/you/my-kernel-workspace/     ← real, developer-owned, must not be touched
+  ${STAGING_KERNEL_DIR}                     ← just wiped, empty
+
+  os.symlink(s, kernsrc)      # STAGING_KERNEL_DIR itself becomes a symlink pointing AT s
+
+AFTER:
+  /home/you/my-kernel-workspace/                    ← real directory, completely untouched
+  ${STAGING_KERNEL_DIR} → /home/you/my-kernel-workspace/   ← symlink
+```
+here, we didnt copied fulll contents. we just made symlink. so, we dont delete the original source. 
+
+
+
+----
+# COGNITION 
+
+## Steps of kernel.bbclass mapped. 
+
 
 do_patch : untouched
 	same as whats defined in do_patch by patching.bbclass. 
