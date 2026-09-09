@@ -362,12 +362,22 @@ Kernel_do_transform step, converts Image types exported from make to kernel_imag
 FLOW : 
 	`do_compile` -> `do_shared_workdir` -> `do_compile_kernelmodules`
 
-
 Kbuild scaffolding for building _other things against_ this kernel later.
 
+### Why This Step Exist ?
+_ Every BitBake recipe gets its own private sandbox or gets it own private directory for dumping its built stuff. 
+_ In later stage, for out-of-tree kernel module compilation, we would need built kernel artifacts, and generated headers from the kernel build, and we cant find this directory. 
+	_ The build directory name keeps on changing according to latest push commit. 
+	_ Everytime, there is update in kernel, we have to hand edit the dependency directory in out-of-tree kernel module `.bb` file and that would be big hassle. 
+	_ Solution to this, is after kernel do_compile step. we Create a seperate directory, which contains important headers and dependency files, required by out-of-kernel modules, which will reference to this directory directly. 
+```bash
+STAGING_KERNEL_DIR      = tmp/work-shared/beaglebone-yocto/kernel-source
+STAGING_KERNEL_BUILDDIR = tmp/work-shared/beaglebone-yocto/kernel-build-artifacts
+```
+`do_shared_workdir` = shared the working directory of kernel.
+`do_shared_workdir` = entire job is to **publish** the select subset of `${B}` that other recipes need, into that shared location
 
-
-What it does : 
+### What it does : 
 - `cd ${B}` — works inside the just-compiled kernel build tree.
 - `kerneldir=${STAGING_KERNEL_BUILDDIR}` → `install -d $kerneldir` — ensures the destination exists. This isn't `${B}` or a sysroot path; it's a fixed, machine-wide location: `${TMPDIR}/work-shared/${MACHINE}/kernel-build-artifacts`.
 - Copies a deliberately minimal, hand-picked set of files into it — the source comment literally says they've kept this list small on purpose rather than copying everything, to avoid unbounded "file creep":
@@ -377,7 +387,79 @@ What it does :
     - `include/generated/*` and `arch/${ARCH}/include/generated/*` (whole directories, copied recursively)
     - Conditionally: module-signing keys (`certs/signing_key.*`), `include/linux/version.h` on older kernels, a PowerPC-specific `crtsavres.o` quirk, `tools/objtool/objtool` if `CONFIG_UNWINDER_ORC=y`, and `scripts/basic` / `scripts/gcc-plugins`
 
+### Actual Flow 
 
+`do_compile` output -> `{B}`
+```
+# Files copied to ${STAGING_KERNEL_BUILDDIR}
+
+${B}/.config
+${B}/vmlinux, ${B}/arch/arm/boot/zImage   (whatever's in KERNEL_IMAGETYPE_FOR_MAKE)
+${B}/System.map
+${B}/Module.symvers          ← exists but INCOMPLETE at this point
+${B}/include/generated/*
+${B}/include/config/kernel.release
+${B}/include/config/auto.conf
+${B}/certs/signing_key.*     (if signing enabled)
+```
+`Module.symvers` incomplete after `do_compile` step? Because it's generated from the vmlinux link — it only knows about symbols exported _for code that got linked into vmlinux_. Symbols exported specifically for loadable modules aren't finalized until modules actually get built. Hold that thought.
+
+`do_shared_workdir` -- ouput -> `${STAGING_KERNEL_BUILDDIR}`
+It copies the dependencies files. Thats all. nothing else. 
+
+`do_compile_kernelmodules`
+	_ This task builds entirely against its own recipe's private `${B}`, which it already has full access to (same recipe, same WORKDIR — no isolation boundary to cross). It doesn't need anything `do_shared_workdir` produced to do its job.
+	_  `do_compile_kernelmodules`, will use `${B}` do compile kernel modules which are in-tree, and will also give out updated `module.symvers` file with updated symbol table. 
+	_ `do_compile_kernelmodules` will then copy the update symbol table file back to STAGING_KERNEL_BUILDDIR. 
+
+`do_shared_workdir` : 
+	populates the `${STAGING_KERNEL_BUILDDIR}` for out of tree compilation of modules and recipes. 
+	Its like saving the artifacts of build kernel to constant place, so we can reference it when kernel compilation is done, and other stuff needs it. 
+
+## do_compile_kernelmodules : New Task 
+
+_ `addtask compile_kernelmodules after do_compile before do_strip`
+_ runs `make modules`, copies `Module.symvers` back to `STAGING_KERNEL_BUILDDIR` for external modules' symbol resolution.
+
+### What it does ?
+_ **do_compile_kernelmodules** builds every Linux driver/subsystem that the `.config` marked as a _loadable module_
+_ It runs the kernel's own `make modules` target, still entirely inside the build tree. 
+_ Nothing gets installed or packaged here.
+_ Copies the updated symbol table, after compilation of module, back to staging directory. 
+
+### How it does it ?
+```python
+
+do_compile_kernelmodules() {
+	unset CFLAGS CPPFLAGS CXXFLAGS LDFLAGS MACHINE
+	if (grep -q -i -e '^CONFIG_MODULES=y$' .config); then
+		oe_runmake ${PARALLEL_MAKE} modules CC="${KERNEL_CC}" LD="${KERNEL_LD}" ${KERNEL_EXTRA_ARGS}
+	else
+		bbnote "no modules to compile"
+	fi
+}
+addtask compile_kernelmodules after do_compile before do_strip
+```
+* Unsets Flags. 
+* `grep -q -i -e '^CONFIG_MODULES=y$' .config` — the actual guard. `.config` at this point is the same file `do_kernel_configme` finalized before `do_compile` ran. This single line is the entire "is there any module compiling to do" decision
+* `oe_runmake ${PARALLEL_MAKE} modules CC="${KERNEL_CC}" LD="${KERNEL_LD}" ${KERNEL_EXTRA_ARGS}` — this is the actual work. `oe_runmake` is OE's thin wrapper around `make`
+	* build the `modules` kbuild target — with the cross toolchain forced via `KERNEL_CC`/`KERNEL_LD` (same override from `kernel_do_compile`) and OE's computed `-j<N>` parallelism.
+* `addtask compile_kernelmodules after do_compile before do_strip`. 
+* `do_shared_workdir` is the thing that actually wedges itself in between `do_compile` and this task — its _own_ addtask line says `after do_compile before do_compile_kernelmodules`. 
+
+#### Input it takes 
+1. `{B}/.config`
+2. `${S}` : kernel source tree. Every driver's .c files. Required for compilation. 
+3. `${B}` : Build or compiled kernel source, populated by do_compile. 
+	1. built-in `.o`s, `include/generated/*`, `include/config/*`, `vmlinux`, a partial `Module.symvers` covering only built-in exports (incomplete Module.symvers)
+4. `KERNEL_CC / KERNEL_LD` : cross toolchain variables. same as of kernel_do_compile step. 
+
+`STAGING_KERNEL_DIR` / `STAGING_KERNEL_BUILDDIR`. Those exist so _other recipes_ can reach into this recipe's build state through the sysroot. This task _is_ the kernel recipe, so it just uses its own `${S}`/`${B}` directly
+
+#### OUTPUT 
+1. One `.ko` per `=m` driver, sitting **in place** inside the object tree — e.g. `${B}/drivers/net/can/spi/mcp251x.ko` — not moved anywhere else yet.
+2. `${B}/Module.symvers` — extended with every module's exported symbols, on top of the built-in exports `do_compile` already wrote there.
+3. `${B}/modules.order`, `${B}/modules.builtin` — kbuild bookkeeping files listing build order / which subsystems are built-in.
 
 
 ----
@@ -386,9 +468,6 @@ What it does :
 ## Steps of kernel.bbclass mapped. 
 
 
-do_compile_kernelmodules : New Task 
-	`addtask compile_kernelmodules after do_compile before do_strip`
-	runs `make modules`, copies `Module.symvers` back to `STAGING_KERNEL_BUILDDIR` for external modules' symbol resolution.
 
 ---
 
