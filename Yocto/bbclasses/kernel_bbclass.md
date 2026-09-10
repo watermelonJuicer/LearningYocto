@@ -461,6 +461,46 @@ addtask compile_kernelmodules after do_compile before do_strip
 2. `${B}/Module.symvers` — extended with every module's exported symbols, on top of the built-in exports `do_compile` already wrote there.
 3. `${B}/modules.order`, `${B}/modules.builtin` — kbuild bookkeeping files listing build order / which subsystems are built-in.
 
+## do_kernel_link_images : New Task 
+
+`addtask kernel_link_images after do_compile before do_strip`
+sits in parallel with `do_compile_kernelmodules`, both hanging off to `do_compile`
+
+- **kbuild's own output layout is inconsistent by image type**
+- Architecture-native compressed formats (`zImage`, `bzImage`, `uImage`) get placed by kbuild itself under `arch/$ARCH/boot/` — that's baked into the kernel's own Makefiles.
+- `vmlinux` (built for _every_ config, regardless of `KERNEL_IMAGETYPE`) always lands at the top of the build directory, never under `arch/$ARCH/boot/`
+- So any piece of code — inside kernel.bbclass, in a BSP layer, in a standalone script — that generically does "look under `${KERNEL_OUTPUT_DIR}` (= `arch/${ARCH}/boot`) for whatever image type I need" will find `zImage` there, but silently fail to find `vmlinux`.
+
+This step will just copy the vmlinux, and make it available under `arch/$ARCH/boot` folder. 
+
+## do_strip : New Task 
+
+`addtask strip before do_sizecheck after do_kernel_link_images`
+strips the `vmlinux` ELF image specifically (not modules, not other packages), with optional `KERNEL_IMAGE_STRIP_EXTRA_SECTIONS` handling.
+
+Some boards require that we strip extra section from linux image out of vmlinux itself. Maybe size constrains etc. So this step accomplishes it. 
+`KERNEL_IMAGE_STRIP_EXTRA` is variable, which is empty by default. 
+If Any section defined in this, the step would strip that section out of vmlinux image. 
+	Step : vmlinux copied -> iterator over section mentioned -> strip those sections out of copyied image. 
+Uses cross-compiler tool to strip the image. 
+
+#### INPUT 
+File to strip : `${B}/${KERNEL_OUTPUT_DIR}/vmlinux` → `tmp/work/.../linux-yocto/6.6.23+git/build/arch/arm/boot/vmlinux`
+strip tool : `${KERNEL_STRIP}`
+Which sections to remove : `${KERNEL_IMAGE_STRIP_EXTRA_SECTIONS}`
+
+#### OUTPUT 
+output written to : `${B}/${KERNEL_OUTPUT_DIR}/vmlinux.stripped` → `tmp/work/.../build/arch/arm/boot/vmlinux.stripped`.
+Original `vmlinux` at the same location is left completely alone.
+
+
+## do_sizecheck : New Task 
+	
+`addtask sizecheck before do_install after do_strip`
+fails/warns if the built image(s) exceed `KERNEL_IMAGE_MAXSIZE`.
+matters for boards with fixed-size boot partitions.
+
+
 
 ----
 # COGNITION 
@@ -468,25 +508,25 @@ addtask compile_kernelmodules after do_compile before do_strip
 ## Steps of kernel.bbclass mapped. 
 
 
-
----
-
-
-do_kernel_link_images : New Task 
-	`addtask kernel_link_images after do_compile before do_strip`
-	sits in parallel with `do_compile_kernelmodules`, both hanging off to `do_compile`
-
-do_strip : New Task 
-	`addtask strip before do_sizecheck after do_kernel_link_images`
-	strips the `vmlinux` ELF image specifically (not modules, not other packages), with optional `KERNEL_IMAGE_STRIP_EXTRA_SECTIONS` handling.
-
-do_sizecheck : New Task 
-	`addtask sizecheck before do_install after do_strip`
-	fails/warns if the built image(s) exceed `KERNEL_IMAGE_MAXSIZE`.
-	matters for boards with fixed-size boot partitions.
-
-kernel_do_install  : override do_install task. 
+## kernel_do_install  : override do_install task. 
 	`base_do_install` is empty task, so it fills it up. 
+
+
+```bash 
+BASE_WORKDIR ?= "${TMPDIR}/work"
+WORKDIR = "${BASE_WORKDIR}/${MULTIMACH_TARGET_SYS}/${PN}/${PV}"
+D = "${WORKDIR}/image"
+
+
+# FOR BBONE
+${D} = tmp/work/beaglebone_yocto-poky-linux-gnueabi/linux-yocto/6.6.23+git/image/
+```
+
+
+
+
+
+----
 
 do_bundle_initramfs : New Task 
 	`addtask bundle_initramfs after do_install before do_deploy`
