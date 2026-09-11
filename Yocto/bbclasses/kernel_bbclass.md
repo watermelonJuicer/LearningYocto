@@ -501,13 +501,6 @@ fails/warns if the built image(s) exceed `KERNEL_IMAGE_MAXSIZE`.
 matters for boards with fixed-size boot partitions.
 
 
-
-----
-# COGNITION 
-
-## Steps of kernel.bbclass mapped. 
-
-
 ## kernel_do_install  : override do_install task. 
 	`base_do_install` is empty task, so it fills it up. 
 
@@ -522,15 +515,63 @@ D = "${WORKDIR}/image"
 ${D} = tmp/work/beaglebone_yocto-poky-linux-gnueabi/linux-yocto/6.6.23+git/image/
 ```
 
+### Non-kernel recipe. 
+suppose we have recipe, mytool and we compile it. 
+`do_install` step will copy the output (whatever we got from `do_compile` step) -> reorganize and copy it into `{D}`.
+Inside `{D}` it will be places in such way that it will be placed inside file system. So, prefix can be path, in new machine it can be pasted in. 
+`{D}/usr/bin/mytool` | `{D}/use/include/mytool_headers` etc. 
+
+### kernel context
+In kernel context, we have kernel modules, which goes inside `/lib/modules/` and images in `/boot/`. 
+For kernel build, `do_install` takes whatever in {B}, 
+	-> copies `.ko` files in `{D}/lib/modules`
+	-> copies kernel image and metadata in `{D}/boot/`
+
+OUTPUT 
+```bash
+${D}/lib/modules/6.6.23-yocto-standard/drivers/.../*.ko
+${D}/lib/modules/6.6.23-yocto-standard/modules.order, modules.builtin, ...
+${D}/boot/zImage-6.6.23-yocto-standard
+${D}/boot/System.map-6.6.23-yocto-standard
+${D}/boot/config-6.6.23-yocto-standard
+${D}/boot/vmlinux-6.6.23-yocto-standard
+${D}/boot/Module.symvers-6.6.23-yocto-standard
+```
 
 
+## do_bundle_initramfs : New Task 
+
+_ `addtask bundle_initramfs after do_install before do_deploy`
+_ optional second kbuild compile pass baking an initramfs cpio into the image.
+_ Only if `INITRAMFS_IMAGE` + `INITRAMFS_IMAGE_BUNDLE="1"`.
+
+InitramFS : 
+	At initial booting process, kernel does initial memory management, initalize driver baked statically into it etc. 
+	Then kernel requires `rootfs` to initalize other drivers and other stuff. 
+	Mounting file system, itself require drivers which are in userspace. 
+	So, before mounting initial file system, it mounts a ramfs, (small filesystem, which stays in ram). 
+	Kernel mounts ramfs irrespect of whatever, we have initramfs provided or not. if provided, initramfs cpio gets poured into that ramfs. 
+After `do_intall` we have kernel images and kernel modules sitting in `${S}`. 
+
+If, the variables, deciding inclusion of cpio initramfs are enabled, then in this step, 
+	take each kernel type, 
+	for each kernel type, take backup of image already compiled. 
+	recompile or repack the kernel image with cpio initramfs file. 
+	paste into `{D}`. 
+OUTPUT 
+```
+${B}/usr/rootfs-initramfs.cpio           ← decompressed, staged for kbuild to consume
+${B}/arch/arm/boot/zImage                ← restored: original, non-bundled image (unchanged)
+${B}/arch/arm/boot/zImage.initramfs      ← new: kernel + initramfs, one combined file
+```
 
 
 ----
+# COGNITION 
 
-do_bundle_initramfs : New Task 
-	`addtask bundle_initramfs after do_install before do_deploy`
-	optional second kbuild compile pass baking an initramfs cpio into the image, only if `INITRAMFS_IMAGE` + `INITRAMFS_IMAGE_BUNDLE="1"`.
+## Steps of kernel.bbclass mapped. 
+
+
 
 do_package : not override, but defines variables. 
 
