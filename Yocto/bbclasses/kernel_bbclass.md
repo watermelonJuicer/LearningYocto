@@ -566,16 +566,115 @@ ${B}/arch/arm/boot/zImage.initramfs      ← new: kernel + initramfs, one combin
 ```
 
 
-----
-# COGNITION 
+## do_package : not override, but defines variables. 
 
-## Steps of kernel.bbclass mapped. 
+The Point of `do_package` step is to take output of do_install, there is lot of stuff after do_install, and put or sort it into different bins. Files for debug, go into debug bins, files for compilation against this package, go into development bin, file for running application, goes into to_run application bin. 
+
+Example, `libgreet` recipe. Non-kernel recipe. 
+output after do install : 
+```
+${D}/usr/bin/greet
+${D}/usr/lib/libgreet.so.1.0.0
+${D}/usr/lib/libgreet.so.1   → symlink → libgreet.so.1.0.0
+${D}/usr/lib/libgreet.so     → symlink → libgreet.so.1
+${D}/usr/include/libgreet/greet.h
+${D}/usr/lib/pkgconfig/libgreet.pc
+```
+There are lot of files, .so files are required mainly for running and maybe for compiling against too. Header files are not required for running, just development using libgreet it it provides library etc. 
+`do_package` will do package-split, and sort the files into different categories. 
+
+OUTPUT : `${WORKDIR}/package-split/`
+```
+packages-split/
+├── libgreet/
+│   └── usr/
+│       ├── bin/greet
+│       └── lib/
+│           ├── libgreet.so.1.0.0
+│           └── libgreet.so.1 -> libgreet.so.1.0.0
+├── libgreet-dev/
+│   └── usr/
+│       ├── include/libgreet/greet.h
+│       └── lib/
+│           ├── libgreet.so -> libgreet.so.1
+│           └── pkgconfig/libgreet.pc
+└── libgreet-dbg/
+    └── usr/
+        ├── lib/debug/usr/bin/greet.debug
+        ├── lib/debug/usr/lib/libgreet.so.1.0.0.debug
+        └── src/debug/libgreet/1.0-r0/greet.c
+```
+`-dbg` contains files associated with libgreet, which contains debug symbols. 
+`-dev` contains file which are purley for developmental purpose.
+`libgreet` contains files for runing, binary and dynamic so its linked again. 
+also they are arranged in directory structure, such that the suffix is path in real file system. 
+
+### KERNEL `do_package`
+
+Similaryly for kernel, we have debug symbols, library given by kernel, in case we need to compile something using that kernel information, modules (which are compiled as loadable modules) etc. 
+here, we take example of kernel and 3 modules (loadable). 
+
+INPUT of `do_package`
+```
+${D}/lib/modules/6.6.23-yocto-standard/modules.order
+${D}/lib/modules/6.6.23-yocto-standard/modules.builtin
+${D}/lib/modules/6.6.23-yocto-standard/modules.builtin.modinfo
+${D}/lib/modules/6.6.23-yocto-standard/drivers/misc/eeprom/at24.ko
+${D}/lib/modules/6.6.23-yocto-standard/drivers/usb/serial/ftdi_sio.ko
+${D}/lib/modules/6.6.23-yocto-standard/drivers/iio/adc/ti-adc081c.ko
+${D}/boot/zImage-6.6.23-yocto-standard
+${D}/boot/System.map-6.6.23-yocto-standard
+${D}/boot/config-6.6.23-yocto-standard
+${D}/boot/vmlinux-6.6.23-yocto-standard
+${D}/boot/Module.symvers-6.6.23-yocto-standard
+```
+
+OUTPUT : 
+```
+packages-split/
+├── kernel-base/
+│   └── lib/modules/6.6.23-yocto-standard/
+│       ├── modules.order
+│       ├── modules.builtin
+│       └── modules.builtin.modinfo
+├── kernel-image-zimage/
+│   └── boot/
+│       └── zImage-6.6.23-yocto-standard
+├── kernel-vmlinux/
+│   └── boot/
+│       └── vmlinux-6.6.23-yocto-standard
+├── kernel-dev/
+│   └── boot/
+│       ├── System.map-6.6.23-yocto-standard
+│       ├── config-6.6.23-yocto-standard
+│       └── Module.symvers-6.6.23-yocto-standard
+├── kernel-module-at24/
+│   └── lib/modules/6.6.23-yocto-standard/drivers/misc/eeprom/
+│       └── at24.ko
+├── kernel-module-ftdi-sio/
+│   └── lib/modules/6.6.23-yocto-standard/drivers/usb/serial/
+│       └── ftdi_sio.ko
+├── kernel-module-ti-adc081c/
+│   └── lib/modules/6.6.23-yocto-standard/drivers/iio/adc/
+│       └── ti-adc081c.ko
+└── kernel-dbg/
+    └── usr/lib/debug/lib/modules/6.6.23-yocto-standard/.../*.ko.debug (+ vmlinux.debug)
+```
+see, we have different debug symbols and kernel, boot for boot info, modules etc. 
+
+# Kernel Package Splits — Purpose Reference
+
+| Package                                      | Purpose                                                                                                                                                                                           |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kernel-image-zimage`                        | The bootable image bytes — what U-Boot actually loads and jumps into                                                                                                                              |
+| `kernel-vmlinux`                             | Full unstripped ELF — on-target crash/debug analysis only, never in production                                                                                                                    |
+| `kernel-base`                                | Barely any content of its own — its real job is the postinst trigger that regenerates `modules.dep`/`modules.alias`/etc. against whatever modules actually got installed                          |
+| `kernel-dev`                                 | Headers/`.config`/`Module.symvers` — for building further out-of-tree modules on-target later, never needed just to run what's already built                                                      |
+| `kernel-module-<name>`                       | The individually-installable payload — lets an image include exactly the drivers its hardware needs, no more                                                                                      |
+| `kernel-dbg`                                 | Split-out debug symbols — debug/development images only                                                                                                                                           |
+| `kernel` / `kernel-image` / `kernel-modules` | Empty umbrella meta-packages — convenient stable names that RDEPENDS onto the real, version-suffixed packages underneath, so you don't have to spell out exact version strings in `IMAGE_INSTALL` |
 
 
+## do_populate_sysroot 
 
-do_package : not override, but defines variables. 
-
-do_populate_sysroot : 
-
-kernel_do_deploy : override of empty skeleton function
-	`kernel_do_deploy`, further extended by `do_deploy[prefuncs] += "read_subpackage_metadata"` and `kernel-devicetree.bbclass`'s `do_deploy:append()`. **Role:** copies the final image(s)/module tarball/initramfs-bundled image into `DEPLOYDIR`, handling the "latest" symlink naming.
+	populates kernel headers for compilation against kernel by out-of-tree module. 

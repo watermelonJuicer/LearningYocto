@@ -1,5 +1,47 @@
 package : self-contained, addressable unit of software. software with all its dependencies, a unit of software which contains everything, it requires to run, and can be run without needing to install or copy anything. 
 
+The Point of `do_package` step is to take output of do_install, there is lot of stuff after do_install, and put or sort it into different bins. Files for debug, go into debug bins, files for compilation against this package, go into development bin, file for running application, goes into to_run application bin. 
+
+Example, `libgreet` recipe. Non-kernel recipe. 
+output after do install : 
+```
+${D}/usr/bin/greet
+${D}/usr/lib/libgreet.so.1.0.0
+${D}/usr/lib/libgreet.so.1   → symlink → libgreet.so.1.0.0
+${D}/usr/lib/libgreet.so     → symlink → libgreet.so.1
+${D}/usr/include/libgreet/greet.h
+${D}/usr/lib/pkgconfig/libgreet.pc
+```
+There are lot of files, .so files are required mainly for running and maybe for compiling against too. Header files are not required for running, just development using libgreet it it provides library etc. 
+`do_package` will do package-split, and sort the files into different categories. 
+
+OUTPUT : `${WORKDIR}/package-split/`
+```
+packages-split/
+├── libgreet/
+│   └── usr/
+│       ├── bin/greet
+│       └── lib/
+│           ├── libgreet.so.1.0.0
+│           └── libgreet.so.1 -> libgreet.so.1.0.0
+├── libgreet-dev/
+│   └── usr/
+│       ├── include/libgreet/greet.h
+│       └── lib/
+│           ├── libgreet.so -> libgreet.so.1
+│           └── pkgconfig/libgreet.pc
+└── libgreet-dbg/
+    └── usr/
+        ├── lib/debug/usr/bin/greet.debug
+        ├── lib/debug/usr/lib/libgreet.so.1.0.0.debug
+        └── src/debug/libgreet/1.0-r0/greet.c
+```
+`-dbg` contains files associated with libgreet, which contains debug symbols. 
+`-dev` contains file which are purley for developmental purpose.
+`libgreet` contains files for runing, binary and dynamic so its linked again. 
+also they are arranged in directory structure, such that the suffix is path in real file system. 
+
+
 After `do_install` step for each recipe, the software and its dependencies are installed in `{D}` directory. 
 in `{D}` its unstructured files plus, `{D}` is different for every recipe. 
 
