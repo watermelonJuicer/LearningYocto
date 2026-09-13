@@ -5,7 +5,7 @@ addtask populate_sysroot after do_install
 
 `do_populate_sysroot` gives us file for compilation of given recipe. 
 
-Suppose out application `mytool` is dependent upon two library files for compilation (which we compile through another recipe). 
+Suppose our application `mytool` is dependent upon two library files for compilation (which we compile through another recipe). 
 At time of compilation of `mytool`, we would need .so and header files from these dependencies to be at one place, so we can instruct compiler to look into given directory.  
 This step is achieved by `do_populate_sysroot` and recipe's own `do_configure`
 

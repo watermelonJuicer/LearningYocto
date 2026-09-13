@@ -204,7 +204,6 @@ Untouched. Same as whats defined in `patch.bbclass`
 
 ## kernel_do_configure : Full override of `do_configure`
 	Replaces `oe-core` `base_do_configure.
-	TBD 
 
 ### Configuration of files for kernel compilation 
 

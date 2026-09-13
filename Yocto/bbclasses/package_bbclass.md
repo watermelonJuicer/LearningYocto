@@ -1,6 +1,6 @@
 package : self-contained, addressable unit of software. software with all its dependencies, a unit of software which contains everything, it requires to run, and can be run without needing to install or copy anything. 
 
-The Point of `do_package` step is to take output of do_install, there is lot of stuff after do_install, and put or sort it into different bins. Files for debug, go into debug bins, files for compilation against this package, go into development bin, file for running application, goes into to_run application bin. 
+The Point of `do_package` step is to take output of `do_install`, there is lot of stuff after do_install, and put or sort it into different bins. Files for debug, go into debug bins, files for compilation against this package, go into development bin, file for running application, goes into to_run application bin. 
 
 Example, `libgreet` recipe. Non-kernel recipe. 
 output after do install : 
