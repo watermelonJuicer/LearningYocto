@@ -7,6 +7,7 @@
 | [bitbake](bitbake.md)    | info about bitbake as standalone part. what is it without yocto.                        |
 | [oe-core](oe-core.md)    | The second pillar or yocto. as layer                                                    |
 | [[Yocto]]                | Yocto Project. Information can be repetitive, but it gives info how it works and stuff. |
+| [[Commands]]             | Commands Collected and their use.                                                       |
 
 # Core-image-minimal
 
@@ -24,7 +25,7 @@
 | [[base_bbclass]]    | base.bbclass information. ==MOST IMPORTANT==                                       | classes.global |
 | [[staging_bbclass]] | staging.bbclass information. provides populate sysroot. step after the do_install. | classes.global |
 | [[package_bbclass]] | package.bbclass information                                                        | classes.global |
-|                     |                                                                                    |                |
+| [[Image_bbclass]]]  | the parent of recipe which generates image                                         |                |
 # bbclasses (For building kernel)
 
 | bbclass            | Info                 |
