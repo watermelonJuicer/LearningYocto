@@ -7,7 +7,7 @@
 | [bitbake](bitbake.md)    | info about bitbake as standalone part. what is it without yocto.                        |
 | [oe-core](oe-core.md)    | The second pillar or yocto. as layer                                                    |
 | [[Yocto]]                | Yocto Project. Information can be repetitive, but it gives info how it works and stuff. |
-| [[Commands]]             | Commands Collected and their use.                                                       |
+| [[Commands_and_debuggig]]             | Commands Collected and their use.                                                       |
 
 # Core-image-minimal
 

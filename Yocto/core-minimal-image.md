@@ -238,4 +238,9 @@ python () {
                   ))
 }
 
+# it creates a list of features which one to enable and which one to disable
+# with long string. 
+# we have OE_DEL as in defconfig, the features which are already set to No, those line to be deleted, and and then we append the lines whose values are 
+# =Y. 
 ```
+
