@@ -57,3 +57,27 @@ Just read `log.do_configure` / `run.do_configure` (no suffix) and you always get
 20260916-074632.774487 do_configure (76117): log.do_configure.76117   ← last one, matches the symlink
 20260916-075351.522993 do_compile   (78224): log.do_compile.78224
 ```
+
+
+# Exporting graph for recipe. 
+
+Export whole graph of given recipe
+```bash 
+bitbake -g busybox
+
+
+# convert to svg format 
+dot -Tpng task-depends.dot -o task-depends.png
+
+
+# interactive viewew for dot graphs. 
+xdot task-depends.dot
+```
+
+
+Filter to just recipe we care about 
+```bash 
+bb-depends-dot task-depends.dot -tr busybox > busybox-subgraph.dot   # transitive deps of busybox
+dot -Tsvg busybox-subgraph.dot -o busybox-subgraph.svg
+```
+
