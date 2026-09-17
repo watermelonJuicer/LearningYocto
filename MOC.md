@@ -25,7 +25,7 @@
 | [[base_bbclass]]    | base.bbclass information. ==MOST IMPORTANT==                                       | classes.global |
 | [[staging_bbclass]] | staging.bbclass information. provides populate sysroot. step after the do_install. | classes.global |
 | [[package_bbclass]] | package.bbclass information                                                        | classes.global |
-| [[Image_bbclass]]]  | the parent of recipe which generates image                                         |                |
+| [[Image_bbclass]]   | the parent of recipe which generates image                                         |                |
 # bbclasses (For building kernel)
 
 | bbclass            | Info                 |

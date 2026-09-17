@@ -181,6 +181,18 @@ do_install() {
 
 ```
 
+It populates the holding area `${D}` mainly. 
+`do_compile` leaves us with built elf binary, `.so` files, and other artifacts. They dont are scattered in `{B}`. 
+`do_install` takes those scattered compiled artifacts, and arrange them or install them in fake rootfile system under staging directory called {D}. 
+`do_package` then walks this fake rootfile system, takes this built artifacts and arranges them into bins according to package required or instructed to generate. 
+
+Its core function: everything meant to eventually ship in a package gets copied out of the build tree and into a separate staging directory, a holding area referred to as `${D}` — not the live build host, not anywhere permanent. For a normal recipe `${D}` resolves to `${WORKDIR}/image`: a scratch directory rebuilt every run, ending up shaped like a miniature root filesystem — `${D}/usr/bin/foo`, `${D}/usr/lib/libfoo.so.1.0.0`, `${D}/usr/include/foo.h` — scoped to _only this recipe's_ files.
+
+Every recipe automatically pulls in `base.bbclass`, and that class ships `do_install` as an empty stub, the real work only appears once a build-system class fills it in. `autotools.bbclass` supplies the actual body: `oe_runmake 'DESTDIR=${D}' install` — literally `make install`, redirected into `${D}` instead of `/`
+
+### `make install`
+**`make install` is just a different target, named `install`, in the same Makefile.** No magic — it's shell commands the Makefile's author wrote, whose job is to _copy the already-built artifacts out of the build tree into their final system locations_: `/usr/local/bin`, `/usr/local/lib`, `/usr/local/include`, `/usr/local/share/man`, etc. It almost always uses the `install` **program** (not `cp`) — e.g. `install -m 755 myprogram /usr/local/bin/` — because `install` sets permissions/ownership/creates dirs correctly in one atomic step, which is exactly the ownership-correctness point from `do_install`
+
 # `do_build()`
 
 `do_populate_sysroot` is the last real-work task — it takes installed files from `${D}` and copies them into the shared sysroot so other recipes can find headers/libraries. Once that's done, `do_build` fires.
