@@ -28,6 +28,28 @@ bitbake -e busybox | grep -E '^(S|B|D|WORKDIR|T|PKGD|PKGDEST)='
 # PKGDEST : final per-package split trees
 ```
 
+# Finding the find resolved script for given step 
+
+Before even start executing, bitbake resolves all steps. For example `do_package`, it will go through given recipe bb file, and package.bbclass file and resolve the appends, prepends, the variables etc and get final script. The final script will be just executed in execution step. 
+We can checkout that final script only, using following way, 
+
+inside each recipe's own `WORKDIR/temp/` directory. Under `WORKDIR/temp` we get two files per task-run — the generated script itself and a matching log, each named with the task and the process ID that produced them , 
+So we will se `run.do_package` and `log.do_package`
+
+Reading run.do_packge, its resolved script. latest one. 
+```bash
+<TMPDIR>/work/<arch>-poky-linux-gnueabi/busybox/<pv>-<pr>/temp/run.do_package
+```
+
+The file **is** the fully resolved script — every `:append`/`:prepend`/override already merged in textually, all variables already expanded.
+
+force it to regenerate without needing the task to be "out of date":
+
+```
+bitbake -c package -f busybox
+```
+
+`-f` forces re-execution even if BitBake thinks nothing changed.
 # Adding own debug to log files. 
 
 Every line a shell task function writes to stdout/stderr is captured verbatim into that task's `log.do_<task>.<pid>` — that's the whole logging mechanism, there's no separate "debug channel" you need to opt into. So:
@@ -81,3 +103,9 @@ bb-depends-dot task-depends.dot -tr busybox > busybox-subgraph.dot   # transitiv
 dot -Tsvg busybox-subgraph.dot -o busybox-subgraph.svg
 ```
 
+
+# Understand function types. 
+
+Function defined as `python <function_name> ()` are exectued when called, not during parsing time. 
+Anonymous function `python ()` are executed during parsing time. 
+`def` defined functions are exectued when called. 

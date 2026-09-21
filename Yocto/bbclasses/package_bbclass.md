@@ -163,3 +163,107 @@ input :
 The metadata record from input is reformatted into debian or ipk format, binary and dependencies are compressed into tar.gz, and then put into .deb archive file. 
 
 output : `${DEPLOY_DIR_DEB}`, organized into per architecture subfolder. 
+
+
+
+# Do_package from `package.bbclass`
+
+```bash 
+
+# Since bitbake can't determine which variables are accessed during package
+# iteration, we need to list them here:
+PACKAGEVARS = "FILES RDEPENDS RRECOMMENDS SUMMARY DESCRIPTION RSUGGESTS RPROVIDES RCONFLICTS PKG ALLOW_EMPTY pkg_postinst pkg_postrm pkg_postinst_ontarget INITSCRIPT_NAME INITSCRIPT_PARAMS DEBIAN_NOAUTONAME ALTERNATIVE PKGE PKGV PKGR USERADD_PARAM GROUPADD_PARAM CONFFILES SYSTEMD_SERVICE LICENSE SECTION pkg_preinst pkg_prerm RREPLACES GROUPMEMS_PARAM SYSTEMD_AUTO_ENABLE SKIP_FILEDEPS PRIVATE_LIBS PACKAGE_ADD_METADATA"
+
+# Functions for setting up PKGD
+PACKAGE_PREPROCESS_FUNCS ?= ""
+# Functions which split PKGD up into separate packages
+PACKAGESPLITFUNCS ?= " \
+                package_do_split_locales \
+                populate_packages"
+# Functions which process metadata based on split packages
+PACKAGEFUNCS += " \
+                package_fixsymlinks \
+                package_name_hook \
+                package_do_filedeps \
+                package_do_shlibs \
+                package_do_pkgconfig \
+                read_shlibdeps \
+                package_depchains \
+                emit_pkgdata"
+```
+
+## FLOW 
+```python 
+
+python do_package () {
+	
+	# packages = list of package to be built.
+    packages = (d.getVar('PACKAGES') or "").split()
+    
+	workdir = d.getVar('WORKDIR')   # the given recipe private directory, Everything is under it. 
+    outdir = d.getVar('DEPLOY_DIR') # Global deploy root. only checked for existence here.
+    dest = d.getVar('D')            # where do_install output is. 
+    dvar = d.getVar('PKGD')         # packaging scratch copy of {D}. 
+    pn = d.getVar('PN')             # package name of the recipe. 
+    
+    
+    # Resolve package version strings. 
+    bb.build.exec_func("package_setup_pkgv", d)
+    # setup variables write in packaged metadata. 
+    bb.build.exec_func("package_convert_pr_autoinc", d)
+}
+```
+
+After this, we have `package_prepare_pkgdata` step. 
+	whats `pkgdata` : After `do_package` step, we have recipe split into different types of packages. step after `do_package` is `do_packagedata`, It copies all files and metadata of recipe (RDEPENDS, PROVIDES, shared-library provided) into common pool, shared global directory. 
+
+`package_prepare_pkgdata` takes dependencies on which busybox depends on, and copies the files its dependencies provides from above mentioned global directory to recipe private directory, to use when doing packaging. Personal copy, as global copy may get tainted by any process running, and ensuring we get fresh copy of dependencies. 
+
+Example flow of `package_prepare_pkgdata` for busybox and it depends on `libcryptx`
+1. go through task graph, and figure out `busybox:do_package` dependency list, on which do_package of busybox is dependent on. 
+2. For each dependency, figure out its manifest file. 
+	1. manifest file for given recipe, contains what files, .so etc it provides and their location in common packagedata directory.  
+3. from manifest file, figure out locaiton and copy files in recipe local directory. 
+
+```python
+	
+	# calling package_prepare_pkgdata
+    bb.build.exec_func("package_prepare_pkgdata", d)
+    bb.build.exec_func("perform_packagecopy", d)
+
+```
+
+```python
+	# PACKAGE_PREPROCESS_FUNCS ?= ""
+	for f in (d.getVar('PACKAGE_PREPROCESS_FUNCS') or '').split():
+		bb.build.exec_func(f, d)
+		
+	# Walks ${PKGD} and classify each type of file
+	# for each elf file, extract debug info and also 
+	# strip elf of debug info so it reduces size of original elf. 
+	# pastes the debug info extracted in .debug file, which later
+	# will be going into {PN}-dbg package. 
+	oe.package.process_split_and_strip_files(d)
+	
+	# fixup permission of files. 
+	oe.package.fixup_perms(d)
+
+```
+
+```python 
+	
+	# PACKAGESPLITFUNCS ?= " \
+    #            package_do_split_locales \
+    #            populate_packages"
+
+	for f in (d.getVar('PACKAGESPLITFUNCS') or '').split():
+        bb.build.exec_func(f, d)
+
+'package_do_split_locals : splits package according to locale language support'
+'populate_package : will walk through do_install output and will split into different packages. '
+```
+
+
+`do_package` takes where `do_install` left off. Splits into different packages. packages themselves are not standalone, but contain metadata file of what the are, their version, their depedency and what so file they need to run. 
+this metadata gets packaged later into .deb file etc. 
+in `do_rootfs` step, while installing .deb file, we go thorugh the metatdata and library its depedent upon, and install them too. 
