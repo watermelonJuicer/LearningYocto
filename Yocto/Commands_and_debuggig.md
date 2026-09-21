@@ -109,3 +109,11 @@ dot -Tsvg busybox-subgraph.dot -o busybox-subgraph.svg
 Function defined as `python <function_name> ()` are exectued when called, not during parsing time. 
 Anonymous function `python ()` are executed during parsing time. 
 `def` defined functions are exectued when called. 
+
+
+# Recipe wise granular detailing 
+
+see the fully resolved function after all classes/appends are applied,
+```
+bitbake-getvar <recipe> -f do_compile
+```
