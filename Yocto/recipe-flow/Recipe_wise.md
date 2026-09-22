@@ -139,3 +139,22 @@ FILES:${PN}:append:class-nativesdk = " ${datadir}"
 ```
 
 This is the standard OE-core pairing: **any time a recipe installs a file into a non-default location, conditionally, for a specific variant/override, it needs a matching `FILES:${PN}:append` (same override) so packaging knows to pick it up.** The two lines only make sense together — `do_install:append:class-nativesdk` puts the file on disk under `${D}`; `FILES:${PN}:append:class-nativesdk` tells `populate_packages` "yes, that path belongs to the main package," for that same variant only.
+
+
+## recipe :: `JDCR_makedevs`
+
+```bash 
+S="${WORKDIR}"
+```
+Above line is important, when source is standalone `.c` file. 
+`do_unpack` unpacks tarballs into `${WORKDIR}`. that naturally gives path like `${WORKDIR}/makdev_1.1.0/`. 
+in case of single file, `SRC_URI = "file://hello_world.c"`, it would copy paste in `${WORKDIR}`. 
+And my default, `${S}=${WORKDIR}/${BPN}-${PV}`. so we need to change `S=${WORKDIR}` so, later for configure, if we cd, we dont get error, like directory not found. 
+
+### ISSUES 
+
+BitBake doesn't search the recipe directory itself for `file://` entries. It only searches specific subdirectories (via `FILESPATH`): `${BPN}-${PV}` (i.e. `jdcr_makedev-1.6.9`), `${BPN}` (`jdcr_makedev`), and `files`, each optionally suffixed with override dirs like
+
+
+BitBake derives `PN`/`PV` from the filename by splitting on `_` and taking only the first two tokens. Your filename is `jdcr_makedev_1.6.9.bb`, which splits into `["jdcr", "makedev", "1.6.9"]`
+Standard fix (not applying, per your instruction) would be to rename the file so only one `_` precedes the version, e.g. `jdcr-makedev_1.6.9.bb` (hyphen inside the name, underscore only before the version) — giving `PN="jdcr-makedev"`, `PV="1.6.9"` — or set `PN`/`PV` explicitly inside the recipe.
