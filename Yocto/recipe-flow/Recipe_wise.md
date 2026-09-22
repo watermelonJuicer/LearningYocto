@@ -1,6 +1,6 @@
 # `makedevs`
 
-bbfile 
+## bbfile 
 ```bash 
 SUMMARY = "Tool for creating device nodes"
 DESCRIPTION = "${SUMMARY}"
@@ -51,4 +51,91 @@ DEPENDS:prepend = "${BASEDEPENDS} "
 
 ## what `do_configure` step does ???
 
+Compilation step = source_code to compile + build time decision. 
+build time decision = 
+* Which features on or off
+* dependencies headers and libraries and where are they
+* compiler architecture selection
+* where things would be installed
 
+compile step = dumb compilation. 
+We need step before it to configure and write configuration to .config, or makefile etc. That step is `do_configure`. 
+
+## Who sets the all the variables and data which appear as export. CC flags etc?
+
+Every one of these variables is set inside BitBake's **configuration/metadata files**, and they're all resolved into one flat datastore **when BitBake parses the recipe** — before it schedules a single task (`do_fetch`, `do_configure`, `do_compile`, ...). There is no task that "sets" `CC`/`CFLAGS`/`PATH` at build-runtime; by the time any task's `run.do_*` script gets generated, the datastore is already final.
+
+The parsing happens in a strict, layered order, and (respecting `?=`/`??=`/`:=` semantics) whatever gets parsed **last** wins:
+
+```
+bitbake.conf (the base formulas)
+   ↓
+MACHINE .conf  (+ its tune .inc → CPU-specific flags like -march=core2)
+   ↓
+DISTRO .conf   (+ included .inc files → e.g. security hardening flags)
+   ↓
+local.conf     (your build-wide overrides)
+   ↓
+every .bbclass the recipe `inherit`s, in order
+   ↓
+the recipe's own .bb file
+   ↓
+any matching .bbappend
+```
+
+the recipe (and `.bbappend`) is parsed **last**, anything you set there naturally overrides everything above it — no special mechanism needed. The convention, though, is to **append/prepend rather than replace outright**, because a plain `CFLAGS = "..."` in the recipe throws away all the tuning (`-march=core2`) and security flags (`-D_FORTIFY_SOURCE=2`, `-fstack-protector-strong`, ...) those earlier layers built up:
+
+```bitbake
+# in makedevs_1.0.1.bb (or a .bbappend)
+CFLAGS:append = " -DEXTRA_DEBUG"
+LDFLAGS:append = " -Wl,--no-undefined"
+```
+
+That's it — since `do_compile()`'s body directly interpolates `${CFLAGS}`/`${LDFLAGS}` ([makedevs_1.0.1.bb:12-14](vscode-webview://0h7jlfi31g5pb6hnskiu067j390l7m67hdhfpb45a2v1ihttb8mt/meta/recipes-devtools/makedevs/makedevs_1.0.1.bb#L12-L14)), the next `run.do_compile.*` would show your flag baked straight into the fully-expanded gcc command line, and `export CFLAGS="..."` at the top would also grow to include it.
+
+If instead you want to reach into `makedevs` from **outside** the recipe (e.g. from `local.conf` or a distro/layer config, without touching the recipe file), use BitBake's recipe-specific override syntax:
+
+## FLOW 
+### `makedevs :: do_configure`
+
+in `run.do_configure` file, we can see compiler configuration is being exported into variables, and also saved in file for referencing next time. 
+
+### `makedevs :: do_compile`
+```python
+do_compile() {
+	${CC} ${CFLAGS} ${LDFLAGS} -o ${S}/makedevs ${S}/makedevs.c
+}
+```
+This `do_compile` executes. All the variables have been set before by previous steps. 
+
+### `makedevs :: do_install`
+```python 
+
+do_install() {
+	# -d :: creates directory and any parent directory. 
+	install -d ${D}${base_sbindir}
+	
+	# copies one file, `${S}/makedevs`, to `${D}${base_sbindir}/makedevs`
+	# explicitly setting its permission mode to `0755`
+	install -m 0755 ${S}/makedevs ${D}${base_sbindir}/makedevs
+}
+
+```
+
+
+
+```bash 
+# generate simular bb file for variabts makedevs-native & nativesdk-makedevs
+BBCLASSEXTEND = "native nativesdk"
+```
+It tells BitBake: "generate extra, independently-buildable **variant recipes** of this same `.bb` file, each with a different class automatically inherited — without writing separate recipe files." For `makedevs`, this produces three distinct recipes, all from one source file:
+
+- `makedevs` — the normal target recipe (what you've been building this whole conversation)
+- `makedevs-native` — a variant that builds and runs **on the build host**
+- `nativesdk-makedevs` — a variant that builds for **an SDK's host environment**
+
+```python 
+FILES:${PN}:append:class-nativesdk = " ${datadir}"
+```
+
+This is the standard OE-core pairing: **any time a recipe installs a file into a non-default location, conditionally, for a specific variant/override, it needs a matching `FILES:${PN}:append` (same override) so packaging knows to pick it up.** The two lines only make sense together — `do_install:append:class-nativesdk` puts the file on disk under `${D}`; `FILES:${PN}:append:class-nativesdk` tells `populate_packages` "yes, that path belongs to the main package," for that same variant only.
