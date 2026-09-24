@@ -143,6 +143,9 @@ This is the standard OE-core pairing: **any time a recipe installs a file into a
 
 ## recipe :: `JDCR_makedevs`
 
+----
+### Including workdir for standalone `.c` files
+
 ```bash 
 S="${WORKDIR}"
 ```
@@ -151,10 +154,88 @@ Above line is important, when source is standalone `.c` file.
 in case of single file, `SRC_URI = "file://hello_world.c"`, it would copy paste in `${WORKDIR}`. 
 And my default, `${S}=${WORKDIR}/${BPN}-${PV}`. so we need to change `S=${WORKDIR}` so, later for configure, if we cd, we dont get error, like directory not found. 
 
-### ISSUES 
 
-BitBake doesn't search the recipe directory itself for `file://` entries. It only searches specific subdirectories (via `FILESPATH`): `${BPN}-${PV}` (i.e. `jdcr_makedev-1.6.9`), `${BPN}` (`jdcr_makedev`), and `files`, each optionally suffixed with override dirs like
+---
 
+### Adding custom paths for file search 
+
+BitBake doesn't search the recipe directory itself for `file://` entries. It only searches specific subdirectories (via `FILESPATH`): `${BPN}-${PV}` (i.e. `jdcr_makedev-1.6.9`), `${BPN}` (`jdcr_makedev`), and `files`, each optionally suffixed with override dirs like. 
+Append your custom file path with 
+```bash
+FILESEXTRAPATHS:prepend := "${THISDIR}/path1:${THISDIR}/path2:"
+# Keep the trailing `:` at the end 
+# (needed so it joins cleanly with the existing `FILESEXTRAPATHS` value it's prepended onto)
+# and separate each additional path with `:` in between.
+```
+
+---
+### Naming convention of recipes
 
 BitBake derives `PN`/`PV` from the filename by splitting on `_` and taking only the first two tokens. Your filename is `jdcr_makedev_1.6.9.bb`, which splits into `["jdcr", "makedev", "1.6.9"]`
 Standard fix (not applying, per your instruction) would be to rename the file so only one `_` precedes the version, e.g. `jdcr-makedev_1.6.9.bb` (hyphen inside the name, underscore only before the version) — giving `PN="jdcr-makedev"`, `PV="1.6.9"` — or set `PN`/`PV` explicitly inside the recipe.
+
+Recipe name and version seperated by `_`. 
+For space in recipe name, use anything other than underscore. 
+
+----
+### To `append` & `prepend` to default recipe
+
+**Is there a generic prepend/append that works either way?** 
+No. `:prepend`/`:append` concatenate raw text into the existing function body — if the base is python and you prepend shell text (or vice versa), it's a syntax error in the resulting body. You always have to match whatever the base is.
+
+Fastest way to check any given task without hunting through class files:
+
+```bash
+$ bitbake -e makdevs-jdcr | grep -n "^python do_fetch\|^do_fetch ("
+```
+
+`bitbake -e` dumps the fully expanded metadata, and it prints the function header verbatim (`python do_fetch ()` vs `do_fetch ()`), so you don't have to trace which `.bbclass` it came from.
+
+Functions exported by python function should be appended and prepended via python
+```python
+
+```bitbake
+python do_fetch:prepend() {
+    bb.note("runs before the normal fetch")
+}
+
+python do_fetch:append() {
+    bb.note("runs after the normal fetch")
+}
+```
+
+for bash 
+```python
+
+do_compile:prepend() {
+    ...
+}
+
+do_compile:append() {
+    ...
+}
+```
+---
+### `do_install`
+base `do_compile` & `do_install` step doesnt do anything by itself. in `base.bbclass`, it is defined `no_operation`. 
+before do_install, `${D}` is defined, and is cleaned. 
+
+---
+### `do_package`
+
+`do_package` doesn't just sort files — the tail end of it (`PACKAGEFUNCS`, then the actual `do_package_write_*` task if your build target went that far) needs a real packaging-tool binary to produce the output package file. **`rpm-native`** being in that list (and no `opkg-utils-native`/`dpkg-native`) tells you your `PACKAGE_CLASSES` is set to the RPM backend. Modern `rpm` is a genuinely heavy piece of software, and every one of those other natives is something _it_ (or one of its own dependencies) needs to build:
+
+- **rpm's own runtime deps**: `popt` (option parsing), `lua` (embedded scriptlets), `sqlite3` (rpm's database backend), `libarchive` + `xz`/`zstd`/`bzip2`/`zlib`/`lzlib` (payload compression), `file` (magic/file-type detection, also used directly by packaging QA)
+- **A TLS/network stack**, pulled in transitively (`curl` → `gnutls` → `nettle`, `libtasn1`, `libidn2`, `libunistring`, `libmicrohttpd`, `gnutls`, `libgcrypt`+`libgpg-error`)
+- **Debug-info tooling**: `elfutils`, `dwarfsrcfiles` — used to split/package debug symbols (feeds the `-dbg` package from last time)
+- **The autotools bootstrap chain**, needed because most of the above are themselves autotools projects: `autoconf`, `automake`, `autoconf-archive`, `libtool`, `m4`, `gnu-config`, `pkgconfig`, plus `cmake`+`ninja` (some of them build via CMake instead)
+- **Generic build-time helpers** pulled in the same transitive way: `bison`/`flex`/`gperf`/`re2c` (parser/lexer generators), `perl`+`perlcross`+`readline`+`gdbm`+`ncurses` (perl and its own deps — lots of build/packaging scripts are Perl), `python3` (ditto for Python), `gtk-doc`/`texinfo-dummy` (doc-generation stand-ins many GNU-style `configure` scripts probe for), `e2fsprogs`/`util-linux`/`libcap`/`libcap-ng`/`acl`/`attr`/`libtirpc`/`libnsl2` (low-level system libs several of the above link against)
+
+adding package_deb to be created too, 
+Adding below to local.conf. 
+```
+# space important before package, otherwise will give error
+
+PACKAGE_CLASSES:prepend = " package_deb" 
+```
+`DEPLOY_DIR` : here is where final rpm or deb packages land. 
