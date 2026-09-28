@@ -239,3 +239,133 @@ Adding below to local.conf.
 PACKAGE_CLASSES:prepend = " package_deb" 
 ```
 `DEPLOY_DIR` : here is where final rpm or deb packages land. 
+
+
+----
+
+# `zlib`
+
+## understanding The Recipe
+
+###  upto `do_fetch` step
+```python 
+
+# Introduciton  
+SUMMARY = "Zlib Compression Library"
+DESCRIPTION = "Zlib is a general-purpose, patent-free, lossless data compression \
+library which is used by many different programs."
+HOMEPAGE = "http://zlib.net/"
+SECTION = "libs"
+LICENSE = "Zlib"
+LIC_FILES_CHKSUM = "file://zlib.h;beginline=6;endline=23;md5=5377232268e952e9ef63bc555f7aa6c0"
+
+# The source tarball needs to be .gz as only the .gz ends up in fossils/
+SRC_URI = "https://zlib.net/${BP}.tar.gz \
+           file://0001-configure-Pass-LDFLAGS-to-link-tests.patch \
+           file://run-ptest \
+           file://CVE-2026-27171.patch \
+           "
+UPSTREAM_CHECK_URI = "http://zlib.net/"
+
+# the SRC_URI given is of first SRC_URI field. 
+SRC_URI[sha256sum] = "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23"
+
+# When a new release is made the previous release is moved to fossils/, so add this
+# to PREMIRRORS so it is also searched automatically.
+PREMIRRORS:append = " https://zlib.net/ https://zlib.net/fossils/"
+```
+`SRC_URI` : list of everything `do_fetch` needs to fetch to build everything. 
+
+according to prefix, the type of fetcher is used in backend. 
+	`https` -> `wget` fetcher
+	`file://` -> local file fetch fetcher. so `file://` is fetcher we are specifying. 
+
+`PREMIRRORS`
+	Pair of `match-pattern`, replacement pairs. URL rewrite table. 
+
+```
+PREMIRRORS:append = " https://zlib.net/ https://zlib.net/fossils/"   
+	
+	MEANS 
+	
+find `https://zlib.net/` → replace with `https://zlib.net/fossils/`
+
+```
+
+if we want to specify multiple `PREMIRRORS`
+```
+PREMIRRORS:append = " \
+    https://zlib.net/           https://zlib.net/fossils/ \
+    https://zlib.net/           http://mirror.acme.internal/sources/ \
+    ftp://ftp.example.org/pub/  https://backup.example.org/archive/ \
+"
+```
+For `SRC_URI = "https://zlib.net/zlib-1.3.1.tar.gz"`, BitBake now tries, in order:
+1. `https://zlib.net/fossils/zlib-1.3.1.tar.gz`
+2. `http://mirror.acme.internal/sources/zlib-1.3.1.tar.gz`
+3. _(pair 3's host `ftp.example.org` doesn't match → skipped)_
+
+do_fetch -> tar.gz downloaded and all the files mentioned in `SRC_URI` is moved (copied) to recipe folder. 
+### `ptest` or `package test`
+
+#### what is ptest
+
+For given library, we write some test program, which we compile along with software, and use that test-script to test our program. In native-PC, without cross-compiling, this is easy. We build software, compile test script for same pc, and run on the pc or cpu itself.
+In case of cross-compiling, we cross-compile for other cpu architecture on native pc, build software and test too, but cant run. We need to ship or transfer both to board, to test. Ptest provides us that feasibilty, in yocto. 
+**In yocto, ptest bbclass, provides us framework, for cross-compiling test, and generate seperate package (includes build and test) which we ship to board and run and test it. Seperate package, as we dont want the test package to end up in production.** 
+
+Ptest elements or pieces of ptest 
+1. Test programme
+	1. the tests, cross-compiled for board architecture. 
+	2. Built on PC or native machine in recipe's work directory. 
+2. `run-ptest`
+	1. tiny shell script that starts the test
+	2. we write it and keep it next to recipe. 
+3. `<name>-ptest`
+	1. Seperate package after `do_package` step, holding above two
+	2. installed on board at `/usr/lib/<name>/ptest/`
+4. `ptest-runner`
+	1. program on board, which finds every `/usr/lib/*/ptest/run-ptest` and runs it. (basically, it will run ptest for all the software who has ptests installed)
+	2. Installed on board. 
+
+For ptest tests, only two rules:
+- The test prints one line per check: `PASS: <name>`, `FAIL: <name>` or `SKIP: <name>`.
+- `run-ptest` exits with 0 if everything passed and non-zero if something failed.
+
+#### `inherit ptest`
+
+What `inherit ptest` automates for us 
+
+1.. Creates new package ( `{PN}-ptest`)
+	`{PN}-ptest` containing everything under `/usr/lib/<recipe_name>/ptest`
+2.. Gives us empty hooks for us to fill in 
+	`do_configure_ptest`, `do_compile_ptest`, `do_install_ptest`
+3.. Adds three tasks that call your hooks at the right moment.
+	In logs they appear as `do_configure_ptest_base`, `do_compile_ptest_base` and `do_install_ptest_base`:
+
+It Handles boring parts of installig: 
+- copies `run-ptest` into `/usr/lib/<name>/ptest/`
+- runs the upstream Makefile's `install-ptest` target, if it has one
+- calls your `do_install_ptest`
+- sets all file ownership to root
+- removes your PC's paths (like `/home/dipesh/...`) from any Makefile copied to the board, because they mean nothing there
+
+**do_compile_ptest**
+- builds test programs that normal `do_compile` doesnt build. 
+- runs after `do_compile`, so library is already built and tests can link against it. 
+- uses cross-compiler so test program can run on board. 
+Skip this hook entirely if the normal build already produces the tests
+
+GENERIC FRAMEWORK 
+```python 
+do_compile_ptest() {
+    # cwd = ${B}. Library already built. oe_runmake / ${CC} = cross toolchain.
+    oe_runmake <a target that BUILDS the tests but does NOT RUN them>
+}
+```
+
+**do_install_ptest**
+copies **everything the tests need at run time** into `${D}${PTEST_PATH}`, which becomes `/usr/lib/<pn>/ptest/` on the board
+
+
+### `oe_runmake`
