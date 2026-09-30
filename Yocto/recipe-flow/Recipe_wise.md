@@ -247,6 +247,19 @@ PACKAGE_CLASSES:prepend = " package_deb"
 
 ## understanding The Recipe
 
+zlib is a **library**: other programs link against it and call its functions (`deflate()`, `inflate()`, `gzopen()`, `crc32()` and so on). It has no user-facing program of its own. The dry run of `make install` showed this: everything goes under `lib/`, `include/`, `lib/pkgconfig/` and `share/man/`, and nothing goes into `bin/`.
+
+**The binaries you saw during compile aren't installed.** `example`, `minigzip`, `examplesh` and `minigzipsh` are zlib's own test programs. The install rules never copy them. The only one that ships anywhere is `examplesh`, which `do_install_ptest` puts in the ptest directory (`/usr/lib/zlib/ptest/`) for on-target testing.
+
+**Other programs use it in two stages:**
+
+1. **Build time**, from the `zlib-dev` package. The program's source does `#include <zlib.h>` and links with `-lz`. The linker follows `libz.so` → `libz.so.1.3.1` and records the soname **`libz.so.1`** in the program's `NEEDED` entries.
+2. **Run time**, from the `zlib` package. When the program starts, the dynamic loader looks up `libz.so.1` on the device and loads it. Only this file and `libz.so.1.3.1` need to be on the target; the headers, `.pc` file and `libz.so` symlink are build-only.
+
+`libz.a` is also available for programs that want zlib copied into their own binary instead (static linking).
+
+**In Yocto**, a recipe that uses zlib just adds `DEPENDS = "zlib"`. That makes zlib build first and puts its headers and libraries into that recipe's sysroot. In your `meta/` layer alone, 60 recipes do this, including binutils, gcc, git, libpng, libxml2, cairo, dropbear, elfutils, gdb and cmake. You don't have to add the runtime dependency yourself: `do_package` scans each binary's `NEEDED` entries, sees `libz.so.1`, and adds `RDEPENDS` on the `zlib` package automatically.
+
 ###  upto `do_fetch` step
 ```python 
 
@@ -306,6 +319,42 @@ For `SRC_URI = "https://zlib.net/zlib-1.3.1.tar.gz"`, BitBake now tries, in orde
 3. _(pair 3's host `ftp.example.org` doesn't match → skipped)_
 
 do_fetch -> tar.gz downloaded and all the files mentioned in `SRC_URI` is moved (copied) to recipe folder. 
+
+
+```python 
+
+# do configure here, will create makefile. 
+do_configure() {
+	LDCONFIG=true ${S}/configure --prefix=${prefix} --shared --libdir=${libdir} --uname=GNU
+}
+do_configure[cleandirs] += "${B}"
+
+# in backend, it will be called as make -j 16 shared. 
+# make shared is command in makefile
+do_compile() {
+	oe_runmake shared
+}
+
+# will go as make install in backend. 
+# install function is already written in makefile in backend. 
+do_install() {
+	oe_runmake DESTDIR=${D} install
+}
+```
+Here, in do_configure step, we are createing a `Makefile` from `${S}/configure` step. Which will then be used by `do_compile` step. 
+make always required a makefile. In makedevs we compiled by hand, through manual `CC` command, as we didn't had makefile. But whenever we use `oe_runmake` it will always look for `Makefile`. 
+
+Running upto `do_configure` step, gives us build directory, and contents are 
+```bash 
+dipesh@dipesh-notebook:~/projects/yocto/poky_jdcr/builds/jdcr$ ls ./tmp/work/core2-64-poky-linux/zlib/1.3.1/build/
+configure.log  Makefile  zconf.h  zlib.pc
+```
+
+`do_compile`, we think how its decided to compile this and that. its all written in `makefile`. `make shared` will execute that function given in makefile. 
+
+`do_install`, we think how it know what to install in build. if we look into makefile, and go into `install` function, we know its already written what to write in folder. So, everything we think `make` does automatically, is already given by us, from user in form of `makefile` commands. 
+
+
 ### `ptest` or `package test`
 
 #### what is ptest
@@ -369,3 +418,50 @@ copies **everything the tests need at run time** into `${D}${PTEST_PATH}`, which
 
 
 ### `oe_runmake`
+
+#### What 
+`oe_runmake` is just wrapper around `make`. It calls `make` in backend, with extra stuff. 
+```bash
+oe_runmake hello
+```
+Above command does 3 things, 
+1. Adds Extra words/arguments. Recipe defines many arguments, so It Adds extra words/arguments to `make` command before calling it. 
+2. Writes a note in log. 
+3. Stops on failure and fail loudly. 
+#### WHY 
+Yocto makes call to `make` multiple times. and everytime, we cant write custom `make` command at everystep for building the recipe. so we have wrapper. which notes what command is being made, and also, we pass out extra argument to wrapper, which takes care of it. 
+Benefits of passing all make commands through oe_runmake, 
+1. we dont have to edit make files by hand at every step. 
+2. Adding arguments laters, we just need to append to extra Variable, and it will be applied. 
+3. provides general framework for all the yocto build steps. 
+
+### `in-tree` and `out-tree` compilation 
+
+In-tree compilation : source and build directory are same. the output of build, is dumped beside the source. `Build_dir == Source_Dir`
+Out-of Tree compilation : source directory and build directory are different. `build_dir != source_dir`
+
+Default in yocto is in-tree compilation, as it costs nothing. out-of-tree compilation requires us to maintain 2 directory and also give extra arguments to make, from where to take source and from where to dump output. 
+
+IN-tree compilation 
+
+In-tree needs no setup. 
+The build system only has to know one location, which is why hand-written Makefiles, small projects, and most older software work this way.
+
+Cost : 
+1. source and generated files mix. 
+2. One configuration per tree. Objects from an arm64 build sit exactly where an x86 build would write its own.
+3. source directory must be writable. 
+Why does Yocto tolerate `B = S` by default? `S` is already a private, disposable copy. It lives under `WORKDIR`, which is per recipe and per target architecture. Costs 1 and 2 are neutralized because Yocto isolates builds by copying the source, not because the build system separates its outputs. Out-of-tree gets the same isolation without the copy. 
+
+OUT-of Tree compilation 
+
+Out-of-tree makes B != S, and each cost flips into a benefit.
+The price is that the build system must now keep track of two locations.
+
+Every rule must say whether a file lives in S or B, and this is where the bugs come from. In-tree builds hide path mistakes, because S and B are the same place and a wrong reference still works. The bug only appears when someone first tries out-of-tree, which is why old software often "breaks" there.
+
+Where each is used ???
+- Out of tree only works if it was designed for two paths. 
+- Default B=S. 
+- **`autotools`, `cmake`, `meson`, `kernel`, `cargo`, `go` classes:** out-of-tree, with `B = ${WORKDIR}/build`, because those tools expect it.
+- **By hand (zlib):** the recipe sets `B` itself, because the package supports out-of-tree but no class applies.
