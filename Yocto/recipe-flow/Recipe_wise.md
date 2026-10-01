@@ -389,8 +389,11 @@ What `inherit ptest` automates for us
 	`{PN}-ptest` containing everything under `/usr/lib/<recipe_name>/ptest`
 2.. Gives us empty hooks for us to fill in 
 	`do_configure_ptest`, `do_compile_ptest`, `do_install_ptest`
+	above are not tasks of bitbake. These are parts of it. the original added to flow as `do_compile_ptest_base`
 3.. Adds three tasks that call your hooks at the right moment.
 	In logs they appear as `do_configure_ptest_base`, `do_compile_ptest_base` and `do_install_ptest_base`:
+	
+**`ptest` bbclass, defines `do_configure_ptest_base`, `do_compile_ptest_base` and `do_install_ptest_base` as task and adds it to flow of building the recipe, for user it exposes `do_configure_ptest`, `do_compile_ptest`, `do_install_ptest`, for user to fill up. These are empty functions, which we as user fill up.** 
 
 It Handles boring parts of installig: 
 - copies `run-ptest` into `/usr/lib/<name>/ptest/`
@@ -465,3 +468,7 @@ Where each is used ???
 - Default B=S. 
 - **`autotools`, `cmake`, `meson`, `kernel`, `cargo`, `go` classes:** out-of-tree, with `B = ${WORKDIR}/build`, because those tools expect it.
 - **By hand (zlib):** the recipe sets `B` itself, because the package supports out-of-tree but no class applies.
+
+## `zlib-jdcr`
+
+1.. `LICENSE` test is important in bb file. 
