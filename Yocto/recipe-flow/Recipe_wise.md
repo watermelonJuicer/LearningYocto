@@ -472,3 +472,34 @@ Where each is used ???
 ## `zlib-jdcr`
 
 1.. `LICENSE` test is important in bb file. 
+
+compiling this recipe for different version, `1.3.2`. 
+### do_unpack 
+
+by default, the `S = ${WORKDIR}/${BPN}-${PV}`, here being `zlib-jdcr_1.3.2` but on unpacking the archive, it unpacks into zlib_1.3.2 as its the name of archive. So we will have 2 folders, and main source in zlib_1.3.2. 
+
+Doing `S = "${WORKDIR}/${BP_ORG_NAME}"` manually. Standard way, when recipe name differs from tar unpacked name. 
+`tar` still unpacks into `${WORKDIR}/zlib-1.3.2/`, exactly as now.
+```bash 
+BP_ORG_NAME="zlib-${PV}"
+# so, below would resolve the name, 
+S = ${WORKDIR}/${BP_ORG_NAME} 
+```
+That would resolve it. 
+
+Another approach
+```bash 
+SRC_URI = "https://zlib.net/${BP_ORG_NAME}.tar.gz;subdir=${BP};striplevel=1 \
+           file://run-ptest \
+           "
+# adding subdir=${BP} would make it extract to our zlib_jdcr-1.3.2 folder. 
+```
+
+Overall upto `do_install` step, 
+we defined SRC_URI 
+unpack the source in `${S}`, 
+compiled and dumped the object file in `${B}`
+and install the files in `${D}`
+
+
+### ptest part
