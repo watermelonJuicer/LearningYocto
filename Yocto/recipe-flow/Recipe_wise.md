@@ -501,5 +501,24 @@ unpack the source in `${S}`,
 compiled and dumped the object file in `${B}`
 and install the files in `${D}`
 
-
 ### ptest part
+
+#### what bbclass we can inherit ???
+Every recipe path, we include in BBPATH, they are all searched for bbclasse files. 
+**Where `BBPATH` comes from:** every layer listed in `conf/bblayers.conf` has a `conf/layer.conf` that adds its own folder. 
+```
+meta/conf/layer.conf:2:            BBPATH .= ":${LAYERDIR}"
+meta-poky/conf/layer.conf:2:       BBPATH =. "${LAYERDIR}:"
+meta-yocto-bsp/conf/layer.conf:2:  BBPATH .= ":${LAYERDIR}"
+```
+So the set of classes available to us is whatever `.bbclass` files sit in those folders in your enabled layers.
+
+```
+RDEPENDS : ${PN}-ptest  +=  "make"
+   │     │      │        │     │
+   │     │      │        │     └─ package to pull in
+   │     │      │        └─ append, with a space, to any existing value
+   │     │      └─ which package this applies to: ${PN}-ptest = zlib-ptest
+   │     └─ override separator: "the value of RDEPENDS for this package"
+   └─ runtime dependencies
+```
