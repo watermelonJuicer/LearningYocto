@@ -522,3 +522,112 @@ RDEPENDS : ${PN}-ptest  +=  "make"
    │     └─ override separator: "the value of RDEPENDS for this package"
    └─ runtime dependencies
 ```
+
+
+---
+
+# `libcap-ng`
+
+## `GNU autotools`
+
+c/cpp projects use usually four kind of build systems. 
+
+1. makefiles 
+	1. small tools and many embedded application. we define how to compile using standalone manually written `makefiles` and compile it using `make`. 
+	2. `make` takes its instruction described in makefile and compile our program. 
+2. `kbuild`/`kconfig`
+	1. using `makefile`/`kconfig`/`.config`
+	2. Linux kernel Bustbox, uboot are compiled using kbuild/kconfig. 
+	3. we use menuconfig, and it parses kconfig files which describe the configuration or variaous parameters to take into consideration while compiling, and we get our binary. 
+3. `GNU autotools`
+	1. configuration is saved in `configure.ac`/`Makefile.am`
+	2. configure.ac or makefile.am defines configuration to take into consideration while compiling. 
+	3. used by : bash, coreutils, etc. 
+4. `CMAKE`/`meson`
+	1. cmakelists.txt / meson.build
+
+autotools is used for compilation when the authors choose autotools to compile the app. 
+
+For application, which would be used across various platform, we dont know what platform it would be compiled in, and hence how it would behave on such platform and based on that configure the parameters at time of compilation, so our program behaves uniformly. 
+We got 2 option to overcome this problem, 
+1. hardcode makefile for each and every platform. 
+2. Discover the machine configuration automatically. 
+Autotools is set of program, we run before compilation step, which would discover the machine configuration and other dependency for given machine, and then configure the parameters so at time of compilation, we end with correct binary. 
+
+`autotools` is set of family of applications. 
+1. `autoconf`
+	1. Input human written `configure.ac` file. 
+	2. Output : `configure`
+2. `automake`
+	1. input : `makefile.am` human written makefile template
+	2. output : `makefile.in` complete makefile configuration
+3. aclocal 
+	1. input : configure.ac
+	2. output : aclocal.m4 
+	3. gathers macro information from `configure.ac`
+4. autoheaders 
+	1. input : configure.ac
+	2. output : header file including all defines. `config.h`
+
+autotools, run small tests on machine to figure out the machine configurations, and dumps out file, which contain configuration to use during compilation. 
+
+in this case, autotools is used for cross-compilation of our recipe. majority of recipe, uses autotools. How to use it, is the question. 
+
+#### So basic flow is like,
+ We write a program with `#ifdef` checks so the same source can be built for many platforms. We write `configure.ac`, which lists the questions to ask about the target system (does it have this header or function, how big is `long`) and the options a user may switch on or off (`--enable-led`). We also write `Makefile.am`, which says what to build. Autotools (`autoreconf`) turns these into a `configure` script and templates. Before compiling, running `configure` answers the questions for the target platform and applies the options, writing `config.h` (the `#define`s the code's `#ifdef`s use) and the `Makefile`. Then `make` compiles the binary.)
+
+autotools, provides or export or writes 3 functions for us, 
+1. `do_configure`
+2. `do_compile`
+3. `do_install`
+
+Whatever modification we want to do, we do by following manners, to change or modify the flow of functions
+1. change variables
+	1. `EXTRA_OECONF`, `PACKAGECONFIG`
+2. `:prepend` or `:append` functions. 
+	1. main functionality and also append or prepend our extra functionality or initialzation. 
+3. Full override 
+	1. in case we want to write our custom. 
+4. override and reuse 
+	1. `do_install() {autotools_do_install; <custom our part>}`
+
+## understanding `libcap-ng`
+
+1. do_unpack, extracts into git subdirectory, and hence in `.bb` file, we change `${S}` to `${WORKDIR}/git`
+2. from logs of `do_configure`
+	1. we can see configure script getting triggered or being called. 
+	2. arguments we gave as extra arguments as `EXTRA_OECONF`, can also be greped and be found. 
+
+## `libcap-ng-jdcr`
+
+### fetching from git
+
+command with params
+```bash 
+SRCURI="git_url;protocol=https;branch=<branch_name>;nobranch=<0/1>"
+SRCREV="hash of commit"
+```
+
+`nobranch=0`, is kind of check. for given branch name in SRCURI, if SRCREV doesn;t exists on that branch, it will throw error. 
+`nobranch=1` turns off that check. it will directly checkout to the commit, of whose hash is given. 
+
+Fetching from git and checkout to specific branch and compile 
+```bash 
+
+# give branch name in branch argument
+SRCURI="<git_url>;protocol=https;branch=<branch_name>"
+SRCREV="hash of commit we want to compile on"
+
+# if we want to fetch the latest commit of given branch 
+SRCREV="${AUTOREV}"
+```
+
+
+Building on particular tag
+```bash
+SRC_URI = "git://github.com/stevegrubb/libcap-ng.git;protocol=https;branch=master"
+SRCREV  = "f5d39702622208b3ada064d7b2eaeaf1454c9bd3"   # = v0.8.5
+
+```
+
+if we dont know which branch has tag, we use `nobranch=1`. 
