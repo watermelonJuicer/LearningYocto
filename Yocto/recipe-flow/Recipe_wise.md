@@ -631,3 +631,23 @@ SRCREV  = "f5d39702622208b3ada064d7b2eaeaf1454c9bd3"   # = v0.8.5
 ```
 
 if we dont know which branch has tag, we use `nobranch=1`. 
+
+----
+Our version of libcap-ng, configure step, added requirement of pkgconfig, in `configure.am` script. So we add the dependency, in our bbfile using following ways. 
+```bash 
+
+DEPENDS += "pkgconfig-native"
+
+# OR 
+
+DEPENDS:append = " pkgconfig-native"
+
+# or, inheriting pkgconfig bbclass also does same. 
+# it adds above statement in backend. 
+
+inherit pkgconfig
+```
+We need native version, as during build, to read `.m4` files, It executes in our local machine. thus `-native` version. 
+pkg-config runs on the host, but Yocto tells it to look in the **target** sysroot,
+`pkgconfig-native` is the tool that runs on your PC, and `libbpf` and `audit` are target libraries that pkg-config finds in `recipe-sysroot/`.
+
