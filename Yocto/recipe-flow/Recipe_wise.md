@@ -651,3 +651,85 @@ We need native version, as during build, to read `.m4` files, It executes in our
 pkg-config runs on the host, but Yocto tells it to look in the **target** sysroot,
 `pkgconfig-native` is the tool that runs on your PC, and `libbpf` and `audit` are target libraries that pkg-config finds in `recipe-sysroot/`.
 
+----
+# ACL 
+
+## `DEPENDS` & `RDEPENDS`
+
+DEPENDS 
+
+Yocto compiles not against host `/usr/` sysroot. For each recipe, it has its own `recipe-sysroot` folder, in which given recipe compile time dependency is there. Before compliation, all headers and `.so` files are copied or hard-linked in recipe sysroot folder. 
+`do_populate_sysroot` runs before `do_configure`, so before configuration for compilation. 
+
+`do_populate_sysroot` -> will go thorugh `DEPENDS` and each recipe's `do_prepare_recipe_sysroot` is run -> copied form dependency recipe `tmp/sysroot-components/arch/deps/`  to current recipe `recipe-sysroot` folder. 
+
+gcc and other common dependency are not added in `DEPENDS` of bbfile as they are already added by default by `base.bbclass`. 
+
+generally error : .h file not found, we need to add that recipe to DEPENDS list.
+
+recipe listed in DEPENDS list, are not included in binary. They are just for compilation, unless dynamically linked against some .so file, then it is automatically added in RDEPENDS. 
+
+RDEPENDS
+runtime dependency. When .deb file is being generated, the rdepends recipes are also included in the package. 
+
+`RDEPENDS:<package>`
+Its list of package that must be installed on board, with this package, whenever package in installed. Our recipe package, is dependent upon the given package to RUN. 
+
+package, (.deb or .ipk) installable modules, have 2 parts. 
+1. main binary of software. runable module. 
+2. metadata file <- list version etc, and also the `depends` string, which lists runtime dependency. 
+
+EXAMPLE 
+we write shell script, which calls `ethtools` command or binary in backend. We build the recipe, but not include `ethtools` in RDEPENDS. 
+It will be installed, and installed on board using .deb file. but while running, it will give error, as ethtools are not installed by default. 
+we include using `RDEPENDS = "ethtools"`, now control file contains `depends=ethtools` and while building binary or kernel, it goes through our recipe, reads depends, and add ethtools binary too, if its not already included in image `do_rootfs`.
+
+## `do_populate_sysroot` & `do_prepare_recipe_sysroot`
+
+### `do_populate_sysroot`
+- run after do_install step. 
+- after do_install is run, it outputs file into `${D}`. From there, the files, requiring for compilation (headers etc) are pasted into common area to `${SYSROOT_DIRS}`. `/tmp/sysroot-components/<arch>/`. 
+- common area, from there the recipe which require a particular recipe headers and files for compilation can hardlink or copy those files into their recipe specific `recipe-sysroot` folder. 
+### `do_prepare_recipe_sysroot`
+* associated with `DEPENDS` attribute in recipe bb file. 
+* wait until recipe listed in `DEPENDS` list have their `do_populate_sysroot` step ran, and their headers are pasted or copied into our recipe local sysroot folder for compilation. 
+* It hardlinks (or copies) each dependency's files from `tmp/sysroots-components/...` into:
+    - `recipe-sysroot/` for target deps: attr, glibc, …
+    - `recipe-sysroot-native/` for host tools: gcc-cross, autoconf-native, pkgconfig-native, …
+
+FULL chain for ACL and attr. 
+acl bb file contains `DEPENDS = "attr" `
+
+```
+acl : fetch -> unpack -> prepare_recipe_sysroot -> A -> configure -> compile -> install --
+			-> populate_sysroot [copies to tmp/sysroots-components/core2-64/acl/] --
+			--> picked by prepare_recipe_sysroot of recipe who has DEPENDS = "acl"
+			
+attr = fetch -> unpack -> prepare_recipe_sysroot -> configure -> compile -> install -> do_populate_sysroot -> A
+
+here A = attr pastes to tmp/sysroot-components/core2-64/attr AND acl, do_prepare_recipe_sysroot copies it into recipe-sysroot for its compilation
+
+```
+
+## understand recipe of ACL
+
+
+LICENSE part
+```python 
+
+# following is LICENSE related to main tar.gz which will be fetched. 
+LICENSE = "LGPL-2.1-or-later & GPL-2.0-or-later"
+
+# LICENSE:something means LICENSE of something. 
+# LICENSE:${PN} = LICENSE of acl [PN = package-name, can be acl, acl-native, etc]
+LICENSE:${PN} = "GPL-2.0-or-later"
+
+# LICENSE : libacl
+LICENSE:lib${BPN} = "LGPL-2.1-or-later"
+
+# checksum of files, in tar.gz. will be checked after unpacking. 
+LIC_FILES_CHKSUM = "file://doc/COPYING;md5=c781d70ed2b4d48995b790403217a249 \
+                    file://doc/COPYING.LGPL;md5=9e9a206917f8af112da634ce3ab41764"
+
+```
+
