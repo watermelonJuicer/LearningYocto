@@ -117,3 +117,21 @@ see the fully resolved function after all classes/appends are applied,
 ```
 bitbake-getvar <recipe> -f do_compile
 ```
+
+# Reading `.rpm` `.deb` package metadata
+```bash
+D=tmp/deploy/deb/core2-64/acl-jdcr-dev_2.4.0-r0_core2-64.deb
+
+ar t $D                      # → debian-binary, control.tar.*, data.tar.*
+                             #   control.tar = metadata, data.tar = actual files
+
+dpkg-deb -I $D               # size + the full control file (Package, Version, Depends, ...)
+dpkg-deb -f $D               # just the control fields
+dpkg-deb -f $D Depends       # one field  → should show: acl-jdcr, bash
+dpkg-deb -f $D Package Version Architecture Depends Recommends Provides Conflicts
+
+dpkg-deb -c $D               # list of files (like tar -tv)
+dpkg-deb -e $D ctrl/         # extract control dir: control, md5sums, postinst/prerm scripts if any
+dpkg-deb -x $D root/         # extract the files
+dpkg-deb -R $D raw/          # extract both: raw/DEBIAN/control + raw/usr/...
+```

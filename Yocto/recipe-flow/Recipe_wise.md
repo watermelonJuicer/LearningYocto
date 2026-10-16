@@ -733,3 +733,9 @@ LIC_FILES_CHKSUM = "file://doc/COPYING;md5=c781d70ed2b4d48995b790403217a249 \
 
 ```
 
+shared-library deps are automatic. You only write `RDEPENDS` for things the scanner **can't see**
+
+## `acl-jdcr`
+whatever you add for RDEPENDS, will be added in deb or rpm package metadata. 
+
+# `libpng`
