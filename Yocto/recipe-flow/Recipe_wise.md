@@ -738,4 +738,46 @@ shared-library deps are automatic. You only write `RDEPENDS` for things the scan
 ## `acl-jdcr`
 whatever you add for RDEPENDS, will be added in deb or rpm package metadata. 
 
-# `libpng`
+# `pkgconfig`
+
+## What pkgconfig provides? Its `what`
+we have library dependencies, installed at odd paths. `pkg-config` is used to resolve the path for compiler. Asking compiler to look for headers at given path. 
+We wrote library, we would have 1. headers | 2. `.so` files. 
+we also ship the .pc files which would point to these files, in case someone want to use our library, and need our headers and so files. 
+we write .pc file -> `export PKG_CONGIH_PATH: <our pc file path>`
+compiling  : `gcc hello.c $(pgk-config --cflags --libs < library_name > -o hello`, in backend, pkgconfig will read .pc file provided, and figure out the files .h & .so files, where they are and point it to compiler to look into that. 
+
+if our library is dependent on other library, it can also pull that library, provides path and so on. 
+library provider writes .pc file. 
+
+## framework provided in yocto. 
+For recipe, all dependency is present in its respective sysroot dir. now using pkgconfig for recipe, it will give library location or will search in libary files of host machine. We want it to look for in sysroot-dir. 
+`inherit pkgconfig` -> `DEPENDS += 'pkgconfig-native` thats all it does. 
+For every recipe, it will install pkgconfig-native in its sysroot-native folder, and export path, pointing to sysroot, and then run that pkgconfig, so it will give us correct path. 
+why we didn't use cross-compiled pkgconfig ? cuz pkgconfig is running during do_compile on host machine, and to run on host machine, to figure out dependencies at do_compile time, we need native version. 
+
+## How it is used?
+autotools, cmake etc dont include or inherit pkgconfig by default. so When in backend they use pkgconfig, we need to do `inherit pkgconfig` in bbfile. 
+
+## `PACKAGECONFIGARGS`
+
+A PACKAGECONFIG entry is a feature switch that keeps the flag and its dependencies in sync
+
+```bash 
+PACKAGECONFIG ??= "glib"
+PACKAGECONFIG:class-native = ""
+
+PACKAGECONFIG[glib] = "--without-internal-glib,--with-internal-glib,glib-2.0 pkgconfig-native"
+
+```
+
+
+`PACKAGECONFIG ??= "swicth_name/feature_name"`
+It means, for particular package, glib feature is enabled. 
+```
+PACKAGECONFIG[name] = "enable,disable,depends,rdepends,rrecommends,conflicts"
+                         1      2       3        4         5          6
+```
+`packageconfig[name]` is positional sensitive value array. 
+if we enable feature, the enable field be added to compiler args, and its depends and rdepends will be pulled in. 
+
