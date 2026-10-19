@@ -1,0 +1,9 @@
+Following is advice, an AI gave me but i think it applies to everything. 
+
+
+How to study it: don't read gstbasetsmux.c from top to bottom. Go in this order:
+
+Learn the TS format.
+Learn the data structures.
+Follow one buffer from the sink pad to the src pad.
+Add features one at a time.
