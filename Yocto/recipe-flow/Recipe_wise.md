@@ -781,3 +781,29 @@ PACKAGECONFIG[name] = "enable,disable,depends,rdepends,rrecommends,conflicts"
 `packageconfig[name]` is positional sensitive value array. 
 if we enable feature, the enable field be added to compiler args, and its depends and rdepends will be pulled in. 
 
+
+# `json-c`
+## `cmake`
+### WHAT ???
+cmake is not compile engine. Its build instruction generator. It reads project configuration -> gives build instruction to execute in form of file `toolchain.cmake` , which further is picked by executor and program is compiled. 
+
+`cmake`,`autotools` : reads files defining project (`cmakelists.txt` in case of cmake). these files define the project, what headers are required etc, check machine configuration, run small scripts in backend to find out machine configuration, headers present etc and dumps out output script. 
+Its is picked by executor (ninja) and is used to build the program. 
+
+source -> binary, there are 2 steps 
+1. decide : which compiler flags ? dependencies, libarires, OS type ? to cross-compile or native compile etc. 
+2. execute : given the configuration decided, execute the commands in right order and get or generate binary. 
+cmake/autotools : deals with first step. 
+ninja/make : second step. 
+
+cmake maintains cache. 
+	cmake in first run, probes the machine for type of compiler, & library etc. All important configuration are stored in cmakecache.txt. 
+	in Subsequent runs, this cache is loaded first and if some variable change is detected, variable value loaded -> cache built again -> stored. 
+Cmake takes command line argument, however it can take configureation related to machine for cross compileation in term of file, called toolchain file. with argument `CMAKE_TOOLCHAIN_FILE`
+
+### cmake && yocto framework
+cmake without yocto, understands command line args. However in yocto, bitbake has all information about the environment (CC, sysroot location etc)
+cmake.bbclass file provides the toolchain file, form the information for compilation present in bitbake enviroment. 
+cmake.bbclass provides : do_generate_toolchain_file -> do_configure -> do_compile -> do_install. 
+
+
