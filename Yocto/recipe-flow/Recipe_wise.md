@@ -807,3 +807,88 @@ cmake.bbclass file provides the toolchain file, form the information for compila
 cmake.bbclass provides : do_generate_toolchain_file -> do_configure -> do_compile -> do_install. 
 
 
+# `busybox`
+
+QUESTIONS 
+1. whats the most basic busybox stripped to bones?
+2. im here to understand the recipe, how busybox gets built, but to understand busybox, i need to understand the packages it generates and how each package is used where. 
+	1. maybe i can follow one package, the most basic and then add functionality to barebones others. 
+
+To understand 
+1. cml1 inherit and its significance
+2. inherit systemd package
+3. update-rc.d
+
+## `cml1`
+
+Provides kconfig framework in yocto environment. 
+```python 
+
+inherit cml1 
+
+# inheriting cml1, we need to add native tools so that kconfig scripts gets compiled 
+DEPENDS += "kern-tools-native bison-native flex-native"
+
+
+# do_configure example 
+do_configure() {
+    oe_runmake bbb_defconfig                               # recipe: baseline
+    merge_config.sh -m .config ${@" ".join(find_cfgs(d))}  # recipe + P2
+    cml1_do_configure                                      # P1
+}
+```
+
+## `systemd`
+Its an init process, which manages other processes plus it ships tightly integrated system daemons (logging, device management, login networking, time sync, others). 
+Manages process daemons using INI style script files. 
+Daemons : process with no attached terminal. 
+
+systemd process unit files live (`process.service`  files) 
+- `/etc/systemd/system/` : admin files, highest priority
+- `/run/systemd/system/` : generated at runtime. (2nd priority)
+- `/usr/lib/systemd/system/` : vender/packaged file (3rd priority)
+
+Systemd framework for  yocto
+
+In `.deb`/`.rpm`/`.ipk` packages, we have data tar, containing binary and also the dependency libraries. It also contains, pre-install, post-install, pre-remove, post-remove binaries. 
+
+Flow while installing application : 
+	pre-install script -> unpack the data from tar and place it -> post-install script. 
+Flow while removing the application 
+	pre-remove script -> delete the data and files associated with application -> post-remove script
+
+Pre_install script : setup user and permission etc. 
+post-install script : set up the data directories, and enables the application with systemctl run or other mechanism. It does the job of setting up data directories and file, which are required during the running of application, and cant be installed during installation time. 
+pre-remove script : will stop the application running if it is. and remove the states or any fragments, so removing binary from running system doesnt affect other application. 
+post-remove script : more cleanup. 
+
+### systemd and yocto
+
+(suppose greeter is dummy application we are building/compiling in yocto and including in final image. )
+
+`bitbake greeter`
+- compile greeter -> `do_install` -> `do_package`
+- package contains data `.tar` and also the scripts, `pre/post` installs & `pre/post` remove. 
+- we provide the script or write it down in `.bb` file itself. 
+- package will wrap everything up in .deb | .rpm | .ipk package. 
+
+`bitbake core-image-minimal`
+- here, we are creating image, and hence consolidating all the application we built so far. 
+- we dont have flow like, we provide all application, we boot on board and then run script to install all applications one by one and then start using it. 
+	- it that would be case, we would have to install all application in every boot and that would be horrible boot time wait. 
+- we need to install the binaries during compilation of image itself. 
+- we consolidate all the application, we built like greeter, we get its .deb installation file, 
+- we install the application with root file system as `rootfs` file. 
+- we run pre-install script -> unpack the binary in rootfs itself. 
+- run post-install script -> enable the data directories etc, also creates sym-link or write in file, which would command to enable this applicaiton. 
+- pack the install file -> run on board. 
+- once on board, the `pid==1` application, looks into file, some sym-link etc, and runs. what our host pc cant do  is run the application. 
+- uptill to enable application, is done on host pc, during do_rootfs step. 
+
+### what systemd.bbclass does 
+appends its pre-install & post-install part to our scripts. 
+
+SOLUTION : Create dummy recipe on busybox. 
+
+
+## `busybox base`
