@@ -838,6 +838,9 @@ do_configure() {
 }
 ```
 
+It Provides only `do_configure`
+
+
 ## `systemd`
 Its an init process, which manages other processes plus it ships tightly integrated system daemons (logging, device management, login networking, time sync, others). 
 Manages process daemons using INI style script files. 
@@ -892,3 +895,60 @@ SOLUTION : Create dummy recipe on busybox.
 
 
 ## `busybox base`
+
+During `do_config` steps, we have few lines that were added to .config but also there are line scheduled for deletion. 
+In `do_config` step, line which are to be added, are first found in .config file -> deleted. we dont know they enabled or disabled, so instead of writing logic if enabled and we need to enable, skip and if disabled, enabled and yada yada. 
+delete the lines containing strings we want to add, and then add them back, however way we want it to. thats the whole logic. 
+
+
+If we add `set -x` it will print all command run, on terminal with `+` prepended. 
+```bash 
+do_configure () {
+	set -x
+}
+```
+
+All tools require kernel-tools native, so make sure we include them. 
+```bash
+# kern-tools-native provides merge_config.sh used in do_configure
+# virtual/crypt provides libcrypt for login/passwd applets
+DEPENDS += "kern-tools-native virtual/crypt"
+```
+
+we wrote do_compile from scratch. `cml1` only provides `do_configure`.
+
+busybox base compilation from scratch 
+```text
+do_configure -- output --> config. 
+
+config.orig = config
+
+// both files contains configuration names. 
+// Not exact command like in config file
+// eg : CONFIG_LOGIN
+$ build busybox.cfg.nosuid & busybox.cfg.suid. 
+
+
+for lines in [busybox.cfg.suid, busybox.cfg.nosuid] {
+	paste line line "# {line} is not enabled. " >> config.disable.app
+	// eg : # CONFIG_LOGIN is not enabled. 
+}
+config.disable.app contains all lines, disabled. 
+
+config = config.orig + config.disable.app
+config.noapp = config
+
+for type in [suid, nosuid] {
+	take each_line from busybox.cfg.{type}
+		{each_line} in config.orig 
+			paste into config.app.{type}
+	
+	// we have config.app.{type}
+	
+	config = config.noapp + config.app.{type}
+	// build form that config so we have busybox.{type}
+	// rename busybox. 
+}
+
+
+```
