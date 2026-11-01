@@ -893,7 +893,97 @@ appends its pre-install & post-install part to our scripts.
 
 SOLUTION : Create dummy recipe on busybox. 
 
+---
+## `update-alternatives`
+`update-alternatives` class provide functionality where, 2 packages provide same name package and they compete for name. busybox provides `ls` and coreutils also provides `ls`. which `ls` command to consider. Plus, `busybox` provides one binary, which can act as many commands. For `ls` to run, we need file name ls at `/bin/ls`. But for busybox, `ls` runs like `busybox ls <directory_name` so we need to create a symlink, at `/bin/ls` which would point to `/bin/busybox` so we can run the command through busybox. 
 
+```bash
+
+update-alternatives --install <LINK_NAME> <NAME> <TARGET> <PRIORITY>
+
+# link name : symbolic name, we want to create 
+# name : name of package/binary
+# target : when link is called, what should be actually called. link -- links to --> target
+# priority we set.
+```
+
+By default, if we dont provide link or target, link and target would be same. 
+```bash 
+ALTERNATIVE:${PN} = "greet"
+
+# creates 
+update-alternatives --install /usr/bin/greet greet /usr/bin/greet.greet-small 10
+```
+
+link path is default to `{bindir}/name` -> `/usr/bin/name`
+if we want to give custom path, use `ALTERNATIVE_LINK_NAME[name] = <custom_link_name>`
+Same applies for target path. 
+
+```bash 
+
+do_install() {
+    install -d ${D}${bindir}
+    install -m 0755 small.sh ${D}${bindir}/greet.small
+    install -m 0755 fancy.sh ${D}${bindir}/greet.fancy
+}
+
+
+PACKAGES =+ "${PN}-small ${PN}-fancy"
+FILES:${PN}-small = "${bindir}/greet.small"
+FILES:${PN}-fancy = "${bindir}/greet.fancy"
+# greet-small = {bindir}/greet.small
+# greet-fancy = {bindir}/greet.fancy
+
+# after this, both -small & -fancy points to greet name
+inherit update-alternatives
+ALTERNATIVE:${PN}-small = "greet"
+ALTERNATIVE:${PN}-fancy = "greet"
+
+ALTERNATIVE_TARGET_greet-pack-small[greet] = "${bindir}/greet.small"
+ALTERNATIVE_TARGET_greet-pack-fancy[greet] = "${bindir}/greet.fancy"
+ALTERNATIVE_PRIORITY_greet-pack-small[greet] = "10"
+ALTERNATIVE_PRIORITY_greet-pack-fancy[greet] = "20"
+
+
+# commands that will be generated 
+# greet-pack-small postinst
+update-alternatives --install /usr/bin/greet greet /usr/bin/greet.small 10
+# greet-pack-fancy postinst
+update-alternatives --install /usr/bin/greet greet /usr/bin/greet.fancy 20
+```
+
+
+All commands 
+```bash 
+
+inherit update-alternatives
+
+ALTERNATIVE:${PN} = "name1 name2"                   # REQUIRED, per package
+
+ALTERNATIVE_LINK_NAME[name1] = "${base_bindir}/name1"  # only if not ${bindir}/name1
+
+ALTERNATIVE_TARGET = "${bindir}/mybinary"           # only to skip auto-rename
+ALTERNATIVE_TARGET[name1] = "${bindir}/other"       #   per name
+ALTERNATIVE_TARGET_<pkg>[name1] = "..."             #   per package + name
+
+ALTERNATIVE_PRIORITY = "50"                         # default 10
+ALTERNATIVE_PRIORITY[name1] = "60"                  #   per name
+ALTERNATIVE_PRIORITY_<pkg>[name1] = "70"            #   per package + name
+```
+
+## `preinstall / postinstall scripts`
+preinstall script -> files unpack -> postinstall script
+preremove script -> file remove -> post remove script
+
+in yocto we can write them as shell function 
+```
+pkg_preinst:${PN}()  { ... }
+pkg_postinst:${PN}() { ... }
+pkg_prerm:${PN}()    { ... }
+pkg_postrm:${PN}()   { ... }
+```
+
+---
 ## `busybox base`
 
 During `do_config` steps, we have few lines that were added to .config but also there are line scheduled for deletion. 
@@ -949,6 +1039,28 @@ for type in [suid, nosuid] {
 	// build form that config so we have busybox.{type}
 	// rename busybox. 
 }
+
+
+```
+
+### do_install step
+`busybox.link` contains data of all applets install in busybox binary. 
+
+output of do_install 
+```bash
+
+dipesh@dipesh-notebook:~/projects/yocto/poky_jdcr/builds/jdcr/tmp/work/core2-64-poky-linux/busybox-jdcr/1.36.1$ tree ./image/
+./image/
+├── bin
+│   ├── busybox -> busybox.nosuid
+│   ├── busybox.nosuid
+│   ├── busybox.suid
+│   └── sh -> busybox.nosuid
+└── etc
+    ├── busybox.links.nosuid
+    ├── busybox.links.suid
+    └── init.d
+
 
 
 ```
