@@ -972,8 +972,10 @@ ALTERNATIVE_PRIORITY_<pkg>[name1] = "70"            #   per package + name
 ```
 
 ## `preinstall / postinstall scripts`
-preinstall script -> files unpack -> postinstall script
-preremove script -> file remove -> post remove script
+
+DURING INSTALLATION
+	`preinstall`  script -> files unpack -> `postinstall` script
+	`preremove` script -> file remove -> `post remove` script
 
 in yocto we can write them as shell function 
 ```
@@ -982,6 +984,109 @@ pkg_postinst:${PN}() { ... }
 pkg_prerm:${PN}()    { ... }
 pkg_postrm:${PN}()   { ... }
 ```
+
+By default, no one adds these script. There are 3 sources, from which these scripts gets added
+1. user added scripts : user writes scripts in `.bb` file. 
+2. From class we inherit. `systemd`,`update-alternatives` dont add all 4. But add some, which helps in their functionality. 
+3. during packaging, if packaging.bbclass feels like it depends on some shared library. 
+
+To see the scripts added. 
+1. do `write_deb` or `write_rpm`
+2. extract the deb or rpm file, these scripts in control tar, so we need to extract the control file. 
+	1. use `dpkg-deb -R`
+3. See the files. 
+
+### what `update-alternatives` add 
+update alternatives adds `postinstall` and `pre-remove` script. 
+postinstall script to install the link of package. `pre-remove` to remove the link before remove the current package. 
+
+postinstall script written by update-alternative 
+```bash 
+#!/bin/sh
+set -e
+	update-alternatives --install /usr/bin/greet greet /usr/bin/greet.greet-small 10
+	
+# this will make link at /usr/bin/greet which would point to /usr/bin/greet.greet-small
+```
+
+pre-remove script written by update-alternative 
+```bash 
+#!/bin/sh
+set -e
+	update-alternatives --remove  greet /usr/bin/greet.greet-small
+	
+# this will remove the link pointing towards /usr/bin/greet.greet-small
+# and will create another link, from its database. 
+```
+
+---
+## `update-rc.d` bbclass
+
+`update-rc.d` is associated with `sysV` init. 
+sysV is pid = 0  program. It manages other programs and daemons. Now for its functioning It had run levels, 
+```
+0 -> halt
+1 -> single user 
+2-5 -> multi-user various stages
+6 -> reboot
+```
+
+For each service, we had one script. which resides in folder `/etc/init.d/<service_name>`
+For each run level, we had one run directory. `/etc/rcN.d/`. N ranges from 0 to 6. 
+In each run level directory, we have scripts, symlinked, `/etc/rc5.d/S20greetd`
+So, when hardware reaches level 5, it will go into directory `/etc/rc5.d/`, run all the scripts with K in name, with kill argument, and then run script with S, with Start argument. 
+```
+# naming convention of files. 
+S20greetd
+S = command. S = start | k = kill
+20 : order. lower order run before. 
+greetd : service name linked to file /etc/init.d/<service_name>
+```
+
+With all the maintainence of script, its easy to make errors. So update-rc.d maintains symlink by itself, instead of us maintaining them manually. 
+
+command : `update-rc.d greetd start default`
+will create symlink for servce `greetd`, at default level 30. 
+
+`$ update-rc.d greetd remove`
+	will remove the greetd service. will first run the init script will kill argument, and then will delete all symlinks associated with it. 
+
+YOCTO 
+
+Thorugh update-rc.d  bbclass, we automate the update-rc.d functionality while building. For given service, it will generate symlinks, during rootfs stage, and will also add pre-install, post-remove scripts for uniform board functioning. 
+We need to add some or define some variables, which are like handles provided by `update-rc.d bbclass`
+```bash 
+
+# the name of initscript file. 
+INITSCRIPT_NAME = "greetd"        # → /etc/init.d/greetd
+
+# defining params of initscript
+INITSCRIPT_PARAMS = "defaults"
+INITSCRIPT_PARAMS = "defaults 90 10"
+INITSCRIPT_PARAMS = "start 90 3 5 . stop 10 0 6 ."  # start params end with dot `.`
+
+# INITSCRIPT PACKAGES. : if recipe builds multiple packages and we want to define initscript
+#                        for particular packages only. 
+
+PACKAGES =+ "${PN}-watchdog"   # watchdog package also being generated
+
+# for watchdog variant, init.d script name is greetd-watchdog
+FILES:${PN}-watchdog = "${sysconfdir}/init.d/greetd-watchdog"  
+
+
+# packages define. we have {PN} & {PN}-watchdog
+# both packages will get their initscripts
+INITSCRIPT_PACKAGES = "${PN} ${PN}-watchdog"
+
+# for {PN} package, initscript name "greetd" and its argument
+INITSCRIPT_NAME:${PN}            = "greetd"
+INITSCRIPT_PARAMS:${PN}          = "defaults 90 10"
+
+# for {PN}-watchdog variant, initscript name and argument
+INITSCRIPT_NAME:${PN}-watchdog   = "greetd-watchdog"
+INITSCRIPT_PARAMS:${PN}-watchdog = "defaults 95 05"
+```
+
 
 ---
 ## `busybox base`

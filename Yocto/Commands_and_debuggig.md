@@ -132,6 +132,6 @@ dpkg-deb -f $D Package Version Architecture Depends Recommends Provides Conflict
 
 dpkg-deb -c $D               # list of files (like tar -tv)
 dpkg-deb -e $D ctrl/         # extract control dir: control, md5sums, postinst/prerm scripts if any
-dpkg-deb -x $D root/         # extract the files
+dpkg-deb -x $D root/         # extract the files only in data.tar
 dpkg-deb -R $D raw/          # extract both: raw/DEBIAN/control + raw/usr/...
 ```
