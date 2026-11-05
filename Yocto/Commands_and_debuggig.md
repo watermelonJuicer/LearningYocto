@@ -135,3 +135,30 @@ dpkg-deb -e $D ctrl/         # extract control dir: control, md5sums, postinst/p
 dpkg-deb -x $D root/         # extract the files only in data.tar
 dpkg-deb -R $D raw/          # extract both: raw/DEBIAN/control + raw/usr/...
 ```
+
+# `devtool` editing and patching source code. 
+```sh
+cd ~/projects/yocto/poky_jdcr
+source oe-init-build-env builds/jdcr
+
+# 1. Get the source into an editable git tree (with patches applied as commits)
+devtool modify busybox-jdcr
+#   → source in:  builds/jdcr/workspace/sources/busybox-jdcr/
+#   → creates a "workspace" layer + bbappend that points the recipe at that tree (externalsrc)
+
+# 2. Edit code
+cd workspace/sources/busybox-jdcr
+vim coreutils/ls.c
+
+# 3. Build only this recipe (runs configure/compile/install/package)
+devtool build busybox-jdcr
+
+# 4. Optional: copy the result straight to a running QEMU/board over ssh
+devtool deploy-target busybox-jdcr root@192.168.7.2
+devtool undeploy-target busybox-jdcr root@192.168.7.2
+
+# 5. Save your changes as patches back into your layer
+git add -A && git commit -m "ls: my change"
+devtool finish busybox-jdcr meta/recipes-jdcr     # writes .patch + adds it to SRC_URI
+#   or: devtool reset busybox-jdcr                # throw it away, back to normal recipe
+```

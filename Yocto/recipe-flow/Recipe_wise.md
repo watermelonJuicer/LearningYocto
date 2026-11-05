@@ -1169,3 +1169,8 @@ dipesh@dipesh-notebook:~/projects/yocto/poky_jdcr/builds/jdcr/tmp/work/core2-64-
 
 
 ```
+
+
+---
+Include custom build of busybox and check. 
+Add custom hello_world and load and check. 
