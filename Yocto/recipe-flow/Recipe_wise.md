@@ -1089,7 +1089,7 @@ INITSCRIPT_PARAMS:${PN}-watchdog = "defaults 95 05"
 
 
 ---
-## `busybox base`
+## `busybox`
 
 During `do_config` steps, we have few lines that were added to .config but also there are line scheduled for deletion. 
 In `do_config` step, line which are to be added, are first found in .config file -> deleted. we dont know they enabled or disabled, so instead of writing logic if enabled and we need to enable, skip and if disabled, enabled and yada yada. 
@@ -1172,5 +1172,34 @@ dipesh@dipesh-notebook:~/projects/yocto/poky_jdcr/builds/jdcr/tmp/work/core2-64-
 
 
 ---
-Include custom build of busybox and check. 
-Add custom hello_world and load and check. 
+### Adding custom `hello_world` recipe in busybox and loading and check
+
+  You just trace down the `whoami` applet and add same binary as it is. Add hellojdcr in config files, and add in distro features. We are good to go. 
+
+## `busybox-variants`
+
+### `busybox-httpd`
+Adding httpd package to PACKAGE will make new deb file. But if package is empty, it wont. 
+```bash
+# package:: httpd.
+
+# include the httpd in package
+PACKAGES =+ "${PN}-httpd"
+
+FILES:${PN}-httpd = "${sysconfdir}/init.d/busybox-httpd /srv/www"
+
+# including in update-rc.d files
+INITSCRIPT_PACKAGES = "${PN}-httpd"
+
+# initscript is already provided by name of busybox-httpd in files. 
+INITSCRIPT_NAME:${PN}-httpd = "busybox-httpd"
+
+do_install:append() {
+  if grep -q "CONFIG_HTTPD=y" ${B}/.config; then
+		install -m 0755 ${WORKDIR}/busybox-httpd ${D}${sysconfdir}/init.d/
+		install -d ${D}/srv/www
+	fi
+}
+```
+here, `CONFIG_HTTPD` is not configured in .config file. so `do_install` wont run hence, no file in package split. While making `.deb` file, it will see, packages-split directory is empty, and hence wont make `-httpd` debian file. 
+

@@ -162,3 +162,14 @@ git add -A && git commit -m "ls: my change"
 devtool finish busybox-jdcr meta/recipes-jdcr     # writes .patch + adds it to SRC_URI
 #   or: devtool reset busybox-jdcr                # throw it away, back to normal recipe
 ```
+
+# Checking Image in qemu 
+
+```bash
+bitbake core-image-minimal                                        # build (fast if up to date)
+grep -i busybox tmp/deploy/images/qemux86-64/core-image-minimal-qemux86-64.rootfs.manifest   # expect busybox-jdcr only
+
+runqemu qemux86-64 nographic          # needs sudo once for tap networking
+# runqemu qemux86-64 nographic slirp  # alternative: no sudo needed
+# quit QEMU: Ctrl-A then X
+```
