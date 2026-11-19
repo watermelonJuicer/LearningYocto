@@ -81,6 +81,59 @@ Just read `log.do_configure` / `run.do_configure` (no suffix) and you always get
 ```
 
 
+# Exporting bitbake variable names to files or logs 
+
+Every bitbake variable is string. A list is big string seperated by spaces. 
+
+## From the shell 
+```sh
+source oe-init-build-env builds/jdcr
+
+# one variable, global context (local.conf + distro + bitbake.conf)
+bitbake-getvar --value DISTRO_FEATURES > distro_features.txt
+
+# one variable as seen by a specific recipe (includes the recipe, its .inc files and classes)
+bitbake-getvar -r busybox-jdcr --value EXTRA_PACKAGE_TO_BUILD > httpd_var.txt
+
+# without --value: also shows which file and line set it (history)
+bitbake-getvar -r busybox-jdcr PACKAGES > packages_history.txt
+
+# a varflag
+bitbake-getvar -r busybox-jdcr -f doc DISTRO_FEATURES
+
+# EVERYTHING the recipe sees (huge: every variable plus history)
+bitbake -e busybox-jdcr > busybox-jdcr.env
+grep -E '^(PACKAGES|FILES:busybox-jdcr-httpd|DISTRO_FEATURES)=' busybox-jdcr.env
+```
+
+Use `-r <recipe>` whenever the variable is set or changed inside a recipe or .inc. Without it you only see the global value. For example, `EXTRA_PACKAGE_TO_BUILD` only exists inside busybox-jdcr
+
+## from recipe 
+
+**Shell task.** BitBake expands `${VAR}` before the shell runs:
+
+```bitbake
+do_install:append() {
+	bbnote "DISTRO_FEATURES = ${DISTRO_FEATURES}"
+	bbplain "PACKAGES = ${PACKAGES}"
+	echo "EXTRA_PACKAGE_TO_BUILD = ${EXTRA_PACKAGE_TO_BUILD}"
+}
+```
+
+```sh
+bitbake busybox-jdcr -c install -f
+cat tmp/work/core2-64-poky-linux/busybox-jdcr/1.36.1/temp/log.do_install | grep -E 'DISTRO_FEATURES|PACKAGES|EXTRA_'
+```
+
+**Python task:**
+	
+```bitbake
+python do_configure:prepend() {
+    bb.note("DISTRO_FEATURES = %s" % d.getVar("DISTRO_FEATURES"))
+    bb.plain("OE_FEATURES = %s" % d.getVar("OE_FEATURES"))
+}
+```
+
 # Exporting graph for recipe. 
 
 Export whole graph of given recipe

@@ -1203,3 +1203,95 @@ do_install:append() {
 ```
 here, `CONFIG_HTTPD` is not configured in .config file. so `do_install` wont run hence, no file in package split. While making `.deb` file, it will see, packages-split directory is empty, and hence wont make `-httpd` debian file. 
 
+# `helloworld-jdcr` using `systemd`
+
+## Understanding systemd `.service` files
+
+systemd is init process having `PID==1`. It looks over every other process, managing their life cycle, their boot sequence etc. It uses `.service` files to keep track of the process and get info about their lifecycle etc. 
+
+`.service` file Elements 
+1. identity  :: whats this process called. 
+2. exec  :: info related to executable file. 
+3. Relations :: running executable relation with other executables or process.
+4. lifecycle :: about life cycle of given process. to restart, how much wait before starting or restarting. 
+5. Boot policy :: start automatically ? part of which group etc. 
+
+service unit files location 
+* `/etc/systemd/service`
+* `/run/systemd/system/` <- runtime systemd files. 
+* `/lib/systemd/system/`
+* `/usr/lib/systemd/system`
+### `.service` file syntax 
+
+.service file is written in format of `key=value`. Key meaning different things. Key can be classified from their use and function into 3 main sections. 
+
+| section name | function                                                                  |
+| ------------ | ------------------------------------------------------------------------- |
+| `[unit]`     | who am I?  how do i related with other process?                           |
+| `[service]`  | how do i run? what happens when i die? related to process execution       |
+| `[Install]`  | who pulls me when enabled? Only run at time of `systemctl enable/disable` |
+
+#### `[unit]` section
+
+| Directive / key        | Meaning                                                                            |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| `Description=`         | Human-readable name shown in status and boot messages                              |
+| `Documentation=`       | `man:`, `https:` etc.                                                              |
+| `Wants=`               | Start X as well. my start doesn't depend on X succeeding                           |
+| `Requires=`            | Start X as well. If X fails to start, I fail as well. if X is stopped, I'm Stopped |
+| `Requisite=`           | X must already be active otherwise I fail immediately.                             |
+| `After=`               | If both are starting, wait until X count as started                                |
+| `Before=`              | reverse of `After=`                                                                |
+| `ConditionPathExists=` | Run only if sysfs node or device exists.                                           |
+| `OnFailure=`           | Units to start when i enter failed state.                                          |
+| `OnSuccess=`           | Units to start when i exit successfully.                                           |
+#### `[Service]` section mechanics
+
+| Directive / key                       | Meaning                                                                                                                                                                      |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Type=`                               | type of service. It defines what successfully started service means for this service. <br>valid values : `simple, exec, forking, oneshot, notify, notify-reload, dbus, idle` |
+| `RemainAfterExit=`                    | for oneshot type. stay active after exit. so we can do other things, or deinitialization.                                                                                    |
+|                                       |                                                                                                                                                                              |
+| `ExecCondition=`                      | Runs first. Exit codes 1–254 **skip** the unit like a Condition; 255 means failure                                                                                           |
+| `ExecStartPre=`                       | Setup steps. If one fails, service fails.                                                                                                                                    |
+| `ExecStart=`                          | Main process start command                                                                                                                                                   |
+| `ExecStartPost=`                      | Runs after service counts as started                                                                                                                                         |
+| `ExecReload=`                         | what `systemctl reload` does.                                                                                                                                                |
+| `ExecStop=`                           | custom stop command.                                                                                                                                                         |
+|                                       | RESTART POLICY                                                                                                                                                               |
+| `Restart=`                            | `no`, `on-success`, `on-failure`, `on-abnormal`, `on-watchdog`, `on-abort`, `always`                                                                                         |
+| `RestartSec=`                         | delay before restarting                                                                                                                                                      |
+|                                       |                                                                                                                                                                              |
+| `User=` \| `Group=`                   | run as unpriviledged user                                                                                                                                                    |
+| `WorkingDirectory=`                   | cwd                                                                                                                                                                          |
+|                                       |                                                                                                                                                                              |
+| `Environment=`                        | `Environment="BLINK_PERIOD=0.2" "FOO=bar"` (a list; values add up)                                                                                                           |
+| `EnvironmentFile=`                    | read `KEY=val` lines from given file.                                                                                                                                        |
+|                                       |                                                                                                                                                                              |
+| `StandardOutput=` \| `StandardError=` | `journal` (default), `null`, `tty`, `kmsg`, `file:/path`, `append:/path`, `truncate:/path`. **This is the systemd answer to “no `>` in ExecStart**                           |
+| `LogLevelMax=`                        | Drop log level above this level for this service                                                                                                                             |
+| `SyslogIdentifier=`                   | Tag shown in `journalctl`                                                                                                                                                    |
+|                                       |                                                                                                                                                                              |
+#### `[Install]` section 
+
+| Directive \| key | Meaning                                             |
+| ---------------- | --------------------------------------------------- |
+| `WantedBy=`      | `enable` creates symlink `<target>.wants.me`        |
+| `RequiredBy=`    | `enable` creates the symlink `<target>.requires/me` |
+| `Also=`          | Enabling me also enables these units                |
+|                  |                                                     |
+
+#### Important keys or directive
+| Type               | systemd considers it started when…                  | Use for                                                     |
+| ------------------ | --------------------------------------------------- | ----------------------------------------------------------- |
+| `simple` (default) | right after `fork()`, without even waiting for exec | programs that stay in the foreground (your script)          |
+| `exec`             | after `execve()` succeeds                           | like simple, but a missing binary counts as a start failure |
+| `forking`          | the parent process exits after daemonizing          | old-style daemons that double-fork (pair with `PIDFile=`)   |
+| `oneshot`          | the process **exits** successfully                  | setup tasks that run and finish                             |
+| `notify`           | the program calls `sd_notify("READY=1")`            | daemons that report when they’re actually ready             |
+|                    |                                                     |                                                             |
+
+`WantedBy=`
+
+`WantedBy=` belongs only in units that should **start at boot on their own**. `WantedBy=multi-user.target` is just `Wants=` written **backwards**, and written into the filesystem as a symlink at **enable time**, not at runtime.
+At boot, systemd treats every symlink in `multi-user.target.wants/` as if `multi-user.target` had `Wants=helloworld.service` in its own file. That’s the whole mechanism.
