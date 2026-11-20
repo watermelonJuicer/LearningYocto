@@ -1295,3 +1295,129 @@ service unit files location
 
 `WantedBy=` belongs only in units that should **start at boot on their own**. `WantedBy=multi-user.target` is just `Wants=` written **backwards**, and written into the filesystem as a symlink at **enable time**, not at runtime.
 At boot, systemd treats every symlink in `multi-user.target.wants/` as if `multi-user.target` had `Wants=helloworld.service` in its own file. That’s the whole mechanism.
+
+### Examples
+
+Program, we wrote and want it running at Boot 
+```sh 
+[Unit]
+Description="Simple program we want running at boot"
+
+[Service]
+ExecStart=/usr/bin/helloworld
+
+[Install]
+WantedBy=multi-user.target
+```
+This program will run once on Bootup. 
+
+---
+
+Program, with no root user. `User=nobody` runs as unproviledge user. And also we initialize Environment Values. 
+```bash 
+[Unit]
+Description=Hello World (case 2)
+
+[Service]
+ExecStart=/usr/bin/helloworld
+User=nobody
+Environment=NAME=world INTERVAL=5
+EnvironmentFile=-/etc/default/helloworld
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+```
+
+---
+`Type=oneshot` runs once. 
+multiple Execstart are allowed for oneshot types only. It will run once, and on exit, or when all commands returned, its considered completed. 
+`RemainAfterExit=yes` this allows program to stay. Otherwise, it finishes, and immediately will run `ExecStop`. 
+```
+[Unit]
+Description=Detach kernel trigger from USR3 (case 3)
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'echo none > /sys/class/leds/beaglebone:green:usr3/trigger'
+ExecStart=/bin/sh -c 'echo 1 > /sys/class/leds/beaglebone:green:usr3/brightness'
+ExecStop=/bin/sh -c 'echo heartbeat > /sys/class/leds/beaglebone:green:usr3/trigger'
+
+[Install]
+WantedBy=multi-user.target
+```
+
+---
+`Requires` means, starting this service, Require service is started too. 
+`After` : Waits for listed service to complete execution. 
+`ConditionPathExists` means : path should exist before starting.
+```bash
+[Unit]
+Description=Blink USR3 (case 4)
+Requires=blinky-setup.service
+After=blinky-setup.service
+ConditionPathExists=/sys/class/leds/beaglebone:green:usr3
+
+[Service]
+ExecStart=/usr/bin/blinky
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+---
+`Type=forking` means, the process, exec will fork new child, and thats when process will be considered completed. 
+`PIDFile` = pid of parent
+```bash
+[Unit]
+Description=Legacy forking hello (case 6)
+
+[Service]
+Type=forking
+PIDFile=/run/hello-legacy.pid
+ExecStart=/usr/bin/hello-legacy -d
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+---
+`OnFailure` runs service listed on failure. 
+`Type=notify` will let process notify if it has finished. 
+```bash
+[Unit]
+Description=Hello production daemon (case 13)
+StartLimitIntervalSec=60
+StartLimitBurst=3
+OnFailure=led-sos.service
+
+[Service]
+Type=notify
+NotifyAccess=all
+ExecStart=/usr/bin/hello-pro
+WatchdogSec=10
+Restart=always
+RestartSec=2
+
+# identity and state
+DynamicUser=yes
+StateDirectory=hello-pro
+
+# sandboxing
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+
+# resource limits
+MemoryMax=16M
+CPUQuota=20%
+TasksMax=16
+
+[Install]
+WantedBy=multi-user.target
+```
