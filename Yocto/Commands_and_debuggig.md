@@ -222,7 +222,22 @@ devtool finish busybox-jdcr meta/recipes-jdcr     # writes .patch + adds it to S
 bitbake core-image-minimal                                        # build (fast if up to date)
 grep -i busybox tmp/deploy/images/qemux86-64/core-image-minimal-qemux86-64.rootfs.manifest   # expect busybox-jdcr only
 
-runqemu qemux86-64 nographic          # needs sudo once for tap networking
+runqemu qemux86-64 nographic          # needs sudo once for tap networking & password : root
 # runqemu qemux86-64 nographic slirp  # alternative: no sudo needed
 # quit QEMU: Ctrl-A then X
 ```
+# checkout the `rootfs`
+
+Browse the unpacked rootfs at location
+```
+tmp/work/qemux86_64-poky-linux/core-image-minimal/1.0/rootfs/
+```
+Extracting the deployed image 
+```sh
+mkdir ~/rootfs-view
+tar -xjf tmp/deploy/images/qemux86-64/core-image-minimal-qemux86-64.rootfs.tar.bz2 -C ~/rootfs-view
+```
+
+**`.manifest`**: list of every package installed in the image, with versions. It's quicker than browsing when you only want to check whether a package made it in.
+
+
