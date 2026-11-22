@@ -1205,6 +1205,18 @@ here, `CONFIG_HTTPD` is not configured in .config file. so `do_install` wont run
 
 # `helloworld-jdcr` using `systemd`
 
+systemd bbclass, defines .service file for the reciepe. (framework or skeletal)
+Generates `pkg_postint`, `pkg_prerm` functions. 
+runs python re-implementation of systemctl during rootfs stage, which will generate symlink of recipes in rootfs. 
+
+It adds function during 
+1. `do_install` <- add postfunctions. by default doesnt add anything during do_install stage. in Postfunctions, just adds checks if all files are present. 
+2. do_package 
+	1. add functions `systemd_populate_packages`
+		1. for each package, runs sanity check -> genrate maintainer scripts -> writes `preset` files -> claim unit files. 
+
+
+
 ## Understanding systemd `.service` files
 
 systemd is init process having `PID==1`. It looks over every other process, managing their life cycle, their boot sequence etc. It uses `.service` files to keep track of the process and get info about their lifecycle etc. 
