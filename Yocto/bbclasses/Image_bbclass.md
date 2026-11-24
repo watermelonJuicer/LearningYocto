@@ -1,4 +1,16 @@
+# QUESTIONS or Thinking flow 
 
+1_ : the main framework that bitbake provides by default. `base.bbclass` providing functions and whats the flow of the functions. Need to search on that and understand better. 
+2_ : If `base,bbclass` provides set of functions to all, then what `image.bbclass` provides on top of it, and how it provides functionality on top of it. 
+3_ : Trace image.bbclass flow and find how it executed what it does. 
+4_ : bitbake understanding on how it resolves the DAG. 
+
+Now, bbclass or bitbake can be views as function of `bbclass` files. So mainFramework is bitbake, which needs to be decoded with hello world. 
+
+
+
+---
+# Cognition
 ## Major variables in `bbclass` for flow. 
 
 Each variable, answers one of 5 questions or can be said that its functions belongs to one of the 5 bins. 
@@ -57,6 +69,42 @@ example : `EXTRA_IMAGECMD:ext4 = "-i 4096 -L bbroot"`
 - `IMAGE_VERSION_SUFFIX ?= "-${DATETIME}""` [raw.githubusercontent.com](https://raw.githubusercontent.com/openembedded/openembedded-core/scarthgap/meta/classes-recipe/image-artifact-names.bbclass)
 - `IMAGE_NAME ?= "${IMAGE_LINK_NAME}${IMAGE_VERSION_SUFFIX}""` [raw.githubusercontent.com](https://raw.githubusercontent.com/openembedded/openembedded-core/scarthgap/meta/classes-recipe/image-artifact-names.bbclass)
 - From bitbake.conf: `DEPLOY_DIR_IMAGE ?= "${DEPLOY_DIR}/images/${MACHINE}"`
+
+
+
+## FLOW with `core-image-minimal`
+
+core-image-minimal.bb
+```bash
+IMAGE_INSTALL = "packagegroup-core-boot ${CORE_IMAGE_EXTRA_INSTALL}"
+inherit core-image
+
+IMAGE_ROOTFS_SIZE ?= "8192"
+
+# if systemd in DISTRO_FEATURES, then add 4096 value otherwise not. 
+IMAGE_ROOTFS_EXTRA_SPACE:append = "${@bb.utils.contains("DISTRO_FEATURES", "systemd", " + 4096", "", d)}"
+```
+
+core-image.bbclass
+```bash
+
+CORE_IMAGE_BASE_INSTALL = '\
+    packagegroup-core-boot \
+    packagegroup-base-extended \
+    \
+    ${CORE_IMAGE_EXTRA_INSTALL} \
+    '
+CORE_IMAGE_EXTRA_INSTALL ?= ""
+IMAGE_INSTALL ?= "${CORE_IMAGE_BASE_INSTALL}"
+
+inherit image
+```
+
+
+
+
+
+
 
 
 
