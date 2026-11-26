@@ -102,6 +102,81 @@ inherit image
 
 
 
+---
+# image.bbclass task graph
+
+BRANCH-A : old task branch 
+```
+recipe_QA 
+	|-> collect SPDX deps 
+	|-> deploy_source_date_epoch
+	
+|-> collect SPDX deps ----------\
+|-> deploy_source_date_epoch ------ -> create spdx
+
+create_spdx
+
+-----
+recipe_qa 
+	- check variables &  bbfile for warning of anything that could go wrong. 
+	- doesn't write anything. It just inspect bbfiles variables and make sure everything is working fine. 
+
+deply source date epoch
+	- produces reproducible builds. 
+
+collect spdx deps && create spdx
+	- write files and info related to dependency we installed. 
+	- not so important for now. 
+```
+
+## Image.bbclass added task branch
+
+
+```text
+                               ┌────────────────────────────┐
+                               │ do_prepare_recipe_sysroot  │
+                               └──────────────┬─────────────┘
+                                              ▼
+                               ┌────────────────────────────┐
+                               │         do_rootfs          │
+                               └──────────────┬─────────────┘
+                                              ▼
+                               ┌────────────────────────────┐
+                               │     do_flush_pseudodb      │
+                               └──────────────┬─────────────┘
+                                              ▼
+                               ┌────────────────────────────┐
+                               │        do_image_qa         │
+                               └──────────────┬─────────────┘
+                                              ▼
+                               ┌────────────────────────────┐
+                               │          do_image          │
+                               └──────────────┬─────────────┘
+               ┌──────────────────────────────┼──────────────────────────────┐
+               ▼                              ▼                              ▼
+┌────────────────────────────┐ ┌────────────────────────────┐ ┌────────────────────────────┐
+│        do_image_tar        │ │       do_image_jffs2       │ │      do_rootfs_wicenv      │
+└──────────────┬─────────────┘ └──────────────┬─────────────┘ └──────────────┬─────────────┘
+               │                              │                              ▼
+               │                              │               ┌────────────────────────────┐
+               │                              │               │        do_image_wic        │
+               │                              │               └──────────────┬─────────────┘
+               └──────────────────────────────┼──────────────────────────────┘
+                                              ▼
+                               ┌────────────────────────────┐
+                               │     do_image_complete      │
+                               └──────────────┬─────────────┘
+                                              ▼
+                               ┌────────────────────────────┐
+                               │   do_populate_lic_deploy   │
+                               └──────────────┬─────────────┘
+                                              ▼
+                               ┌────────────────────────────┐
+                               │          do_build          │
+                               └────────────────────────────┘
+```
+
+
 
 
 

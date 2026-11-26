@@ -37,7 +37,7 @@ Every Recipe in later stage, consumes this corss compiler or output of this part
 Gives `do_fetch` -> `do_compile` -> `do_install` real content. 
 
 ### WHAT ?
-BitBake's engine gives us task _names_ and a graph that runs them in order — that's it. 
+BitBake's engine when given task _names_ and a graph, runs them in order — that's it. 
 The engine has no opinion on what `do_compile` should actually _do_. 
 Something has to supply the real content: the actual sequence of commands that turns raw source code into a compiled, staged, installable artifact. General framework of compiling, packing and installing. 
 Given source code and a target architecture, what are the concrete, repeatable steps to build and install it?
